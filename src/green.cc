@@ -6,6 +6,9 @@
 #include <processthreadsapi.h>
 #include <shlwapi.h>
 
+#include <winstring.h>
+#include <inspectable.h>
+
 #include "detours.h"
 
 #include "config.h"
@@ -20,7 +23,6 @@ static auto RawCryptUnprotectData = CryptUnprotectData;
 static auto RawGetVolumeInformationW = GetVolumeInformationW;
 static auto RawLogonUserW = LogonUserW;
 static auto RawIsOS = IsOS;
-static auto RawNetUserGetInfo = NetUserGetInfo;
 
 // Enumeration for process creation mitigation policy
 enum ProcessCreationMitigationPolicy : DWORD64 {
@@ -121,6 +123,88 @@ MyCryptUnprotectData(_In_ DATA_BLOB* pDataIn,
   return true;
 }
 
+// show_password: bypass Windows Hello so Chrome's password reauth falls back to
+// the legacy path, where MyLogonUserW / MyIsOS short-circuit it. No dependency
+// on the version-specific WinRT header UserConsentVerifierInterop.h: we hand-roll
+// a minimal COM object and only need its RequestVerificationForWindowAsync to fail.
+//
+// Verified against Windows SDK 10.0.22621.0 / 10.0.26100.0:
+//   IID_IUserConsentVerifierInterop = 39E050C3-4E74-441A-8DC0-B81104DF949C
+//   RoGetActivationFactory is the entry Chromium's GetActivationFactory calls.
+typedef HRESULT(WINAPI* FnRoGetActivationFactory)(HSTRING activatableClassId,
+                                                  REFIID iid,
+                                                  void** factory);
+static FnRoGetActivationFactory RawRoGetActivationFactory = nullptr;
+
+static const IID kIidUserConsentVerifierInterop = {
+    0x39E050C3, 0x4E74, 0x441A,
+    {0x8D, 0xC0, 0xB8, 0x11, 0x04, 0xDF, 0x94, 0x9C}};
+
+// IUserConsentVerifierInterop is a single-method WinRT interop interface that
+// inherits IInspectable. We declare just enough of it to implement a fake
+// factory, avoiding the version-specific UserConsentVerifierInterop.h header.
+// Verified against SDK 10.0.22621.0 / 10.0.26100.0.
+struct IUserConsentVerifierInterop : public IInspectable {
+  virtual HRESULT STDMETHODCALLTYPE RequestVerificationForWindowAsync(
+      HWND app_window, HSTRING message, REFIID riid, void** async_operation) = 0;
+};
+
+// Minimal factory implementation. Only RequestVerificationForWindowAsync
+// matters; returning E_FAIL makes Chromium take the legacy reauth path.
+class FakeUserConsentFactory : public IUserConsentVerifierInterop {
+ public:
+  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override {
+    if (IsEqualIID(riid, IID_IUnknown) || IsEqualIID(riid, IID_IInspectable) ||
+        IsEqualIID(riid, kIidUserConsentVerifierInterop)) {
+      *ppv = static_cast<IInspectable*>(this);
+      AddRef();
+      return S_OK;
+    }
+    *ppv = nullptr;
+    return E_NOINTERFACE;
+  }
+  ULONG STDMETHODCALLTYPE AddRef() override { return 2; }
+  ULONG STDMETHODCALLTYPE Release() override { return 1; }
+
+  HRESULT STDMETHODCALLTYPE GetIids(ULONG* count, IID** iids) override {
+    *count = 0;
+    *iids = nullptr;
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE GetRuntimeClassName(HSTRING* name) override {
+    *name = nullptr;
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE GetTrustLevel(TrustLevel* trust) override {
+    *trust = BaseTrust;
+    return S_OK;
+  }
+
+  HRESULT STDMETHODCALLTYPE RequestVerificationForWindowAsync(
+      HWND app_window,
+      HSTRING message,
+      REFIID riid,
+      void** async_operation) override {
+    return E_FAIL;
+  }
+};
+
+static FakeUserConsentFactory g_fake_ucv_factory;
+
+HRESULT WINAPI MyRoGetActivationFactory(HSTRING activatableClassId,
+                                        REFIID iid,
+                                        void** factory) {
+  // IUserConsentVerifierInterop is requested exclusively for the
+  // Windows.Security.Credentials.UI.UserConsentVerifier runtime class, so an
+  // IID match is enough to identify the Windows Hello reauth factory.
+  if (IsEqualIID(iid, kIidUserConsentVerifierInterop)) {
+    *factory = static_cast<IInspectable*>(&g_fake_ucv_factory);
+    g_fake_ucv_factory.AddRef();
+    return S_OK;
+  }
+  return RawRoGetActivationFactory(activatableClassId, iid, factory);
+}
+
 }  // namespace
 
 BOOL WINAPI MyLogonUserW(LPCWSTR lpszUsername,
@@ -129,14 +213,21 @@ BOOL WINAPI MyLogonUserW(LPCWSTR lpszUsername,
                          DWORD dwLogonType,
                          DWORD dwLogonProvider,
                          PHANDLE phToken) {
-  BOOL ret = RawLogonUserW(lpszUsername, lpszDomain, lpszPassword, dwLogonType,
-                           dwLogonProvider, phToken);
-  // Chrome asks the user to re-enter their Windows password before revealing
-  // saved passwords. Pretending the supplied credentials always "worked"
-  // (while keeping the real result) lets the password manager skip that OS
-  // reauth gate. This is the show_password feature.
-  SetLastError(ERROR_ACCOUNT_RESTRICTION);
-  return ret;
+  // Chromium's blank-password probe (password_manager_util_win.cc ->
+  // CheckBlankPasswordWithPrefs) is the only caller that passes an empty
+  // password with LOGON32_LOGON_INTERACTIVE. Forwarding it reaches LSA and
+  // logs a 4625 per call, eventually locking the account. Chromium treats
+  // ERROR_ACCOUNT_RESTRICTION as "password is blank", so fake that and never
+  // touch the real logon path. This keeps show_password working with zero 4625.
+  const bool is_blank_probe =
+      dwLogonType == LOGON32_LOGON_INTERACTIVE &&
+      (lpszPassword == nullptr || lpszPassword[0] == L'\0');
+  if (is_blank_probe) {
+    SetLastError(ERROR_ACCOUNT_RESTRICTION);
+    return false;
+  }
+  return RawLogonUserW(lpszUsername, lpszDomain, lpszPassword, dwLogonType,
+                       dwLogonProvider, phToken);
 }
 
 BOOL WINAPI MyIsOS(DWORD dwOS) {
@@ -149,19 +240,8 @@ BOOL WINAPI MyIsOS(DWORD dwOS) {
   return ret;
 }
 
-NET_API_STATUS WINAPI MyNetUserGetInfo(LPCWSTR servername,
-                                       LPCWSTR username,
-                                       DWORD level,
-                                       LPBYTE* bufptr) {
-  NET_API_STATUS ret = RawNetUserGetInfo(servername, username, level, bufptr);
-  // Force the account's password age to 0 so Chrome believes the password was
-  // just changed and waives the "password is old" reauth requirement.
-  if (level == 1 && ret == 0) {
-    LPUSER_INFO_1 user_info = reinterpret_cast<LPUSER_INFO_1>(*bufptr);
-    user_info->usri1_password_age = 0;
-  }
-  return ret;
-}
+// MyNetUserGetInfo hook removed: its password-age rewrite was a no-op that only
+// amplified the reauth probe frequency (see MyLogonUserW for the real fix).
 
 void MakeGreen() {
   auto RawGetComputerNameW = GetComputerNameW;
@@ -191,9 +271,18 @@ void MakeGreen() {
     // shlwapi.dll
     DetourAttach(reinterpret_cast<LPVOID*>(&RawIsOS),
                  reinterpret_cast<void*>(MyIsOS));
-    // netapi32.dll
-    DetourAttach(reinterpret_cast<LPVOID*>(&RawNetUserGetInfo),
-                 reinterpret_cast<void*>(MyNetUserGetInfo));
+    // combase.dll: bypass Windows Hello so reauth falls back to the legacy
+    // path where MyLogonUserW short-circuits it.
+    HMODULE combase = GetModuleHandleW(L"combase.dll");
+    if (combase) {
+      RawRoGetActivationFactory =
+          reinterpret_cast<FnRoGetActivationFactory>(
+              GetProcAddress(combase, "RoGetActivationFactory"));
+      if (RawRoGetActivationFactory) {
+        DetourAttach(reinterpret_cast<LPVOID*>(&RawRoGetActivationFactory),
+                     reinterpret_cast<void*>(MyRoGetActivationFactory));
+      }
+    }
   }
 
   auto status = DetourTransactionCommit();
