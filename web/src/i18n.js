@@ -196,8 +196,11 @@ const translations = {
     tabs_title: "Tab Enhancement",
     tabs_desc:
       "Double/right-click to close, wheel to switch, hover to activate, keep last tab, and more",
-    keep_last_tab: "Keep Last Tab",
-    keep_last_tab_desc: "Never close the last remaining tab",
+    keep_last_tab: "Close Last Tab Behavior",
+    keep_last_tab_desc: "What happens when you close the last remaining tab",
+    keep_last_tab_close: "Close browser window",
+    keep_last_tab_newtab: "Open a new tab",
+    keep_last_tab_ntp: "Close window if last tab is a new tab",
     double_click_close: "Double-click to Close",
     double_click_close_desc: "Double-click a tab to close it",
     right_click_close: "Right-click to Close",
@@ -222,12 +225,12 @@ const translations = {
     drag_link_new_tab: "Drop Links in New Tab",
     drag_link_new_tab_desc:
       "Dropping a link on the page opens it in a background tab and leaves the current page alone",
-    open_url_new_tab: "Open URL in New Tab",
+    open_url_new_tab: "Open URL on Enter",
     open_url_new_tab_desc:
-      "Address-bar Enter opens the URL in a new tab: Off / Alt+Enter / Shift+Alt+Enter",
-    open_bookmark_new_tab: "Open Bookmark in New Tab",
+      "How Enter in the address bar opens: Current tab / New tab (as Alt+Enter) / New tab (as Shift+Alt+Enter)",
+    open_bookmark_new_tab: "Open Bookmark on Left Click",
     open_bookmark_new_tab_desc:
-      "Bookmark opens in a new tab: Off / Middle+Shift click / Middle click",
+      "How a left-click on a bookmark opens: Current tab / New tab (as Middle+Shift) / New tab (as Middle)",
     new_tab_disable: "Disable on Named Tabs",
     new_tab_disable_desc:
       "Disable the new-tab enhancements (address bar, bookmarks, dropped links) on tabs whose title contains any of the names below",
@@ -490,8 +493,11 @@ const translations = {
     nav_tabs: "标签页增强",
     tabs_title: "标签页增强",
     tabs_desc: "双击/右键关闭、滚轮切换、悬停激活、保留最后一页等标签行为",
-    keep_last_tab: "保留最后一个标签",
-    keep_last_tab_desc: "永不关闭仅剩的最后一个标签",
+    keep_last_tab: "关闭最后一个标签时",
+    keep_last_tab_desc: "关闭仅剩的最后一个标签时的行为",
+    keep_last_tab_close: "关闭浏览器窗口",
+    keep_last_tab_newtab: "打开一个新标签",
+    keep_last_tab_ntp: "如果是新标签页，则关闭浏览器窗口",
     double_click_close: "双击关闭标签",
     double_click_close_desc: "双击标签将其关闭",
     right_click_close: "右键关闭标签",
@@ -514,12 +520,12 @@ const translations = {
     drag_link_new_tab: "拖拽链接开新标签",
     drag_link_new_tab_desc:
       "在页面内拖拽链接松开时，在后台新标签打开，当前页面保持不动",
-    open_url_new_tab: "地址栏回车新标签打开",
+    open_url_new_tab: "地址栏回车打开网址",
     open_url_new_tab_desc:
-      "地址栏回车在新标签打开网址：关闭 / Alt+Enter / Shift+Alt+Enter",
-    open_bookmark_new_tab: "书签新标签打开",
+      "普通回车打开网址的方式：当前页 / 新标签(伪装 Alt+Enter) / 新标签(伪装 Shift+Alt+Enter)",
+    open_bookmark_new_tab: "左键点击书签",
     open_bookmark_new_tab_desc:
-      "书签在新标签打开：关闭 / 中键+Shift 点击 / 中键点击",
+      "左键点击书签的打开方式：当前页 / 新标签(中键+Shift) / 新标签(中键)",
     new_tab_disable: "对指定标签禁用",
     new_tab_disable_desc: "对标题包含下列任一名称的标签禁用新标签增强（地址栏、书签、拖拽链接）",
     new_tab_disable_name: "排除的标签名称",

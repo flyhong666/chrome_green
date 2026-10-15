@@ -5,18 +5,17 @@
       <p class="card-description">{{ t("tabs_desc") }}</p>
     </div>
     <div class="card-content space-y-0">
-      <!-- Keep last tab -->
+      <!-- Close last tab behavior -->
       <div class="setting-row">
         <div class="setting-label-group">
           <label class="setting-label">{{ t("keep_last_tab") }}</label>
           <p class="setting-desc">{{ t("keep_last_tab_desc") }}</p>
         </div>
-        <div
-          :class="['switch-track', settings.keep_last_tab ? 'on' : 'off']"
-          @click="toggle('keep_last_tab')"
-          role="switch"
-          :aria-checked="settings.keep_last_tab">
-          <span class="switch-thumb"></span>
+        <div class="w-max-80">
+          <CustomSelect
+            v-model="settings.keep_last_tab"
+            :options="keepLastTabOptions"
+            @change="() => saveSettings()" />
         </div>
       </div>
 
@@ -68,8 +67,12 @@
       <!-- Wheel + right button switches tabs -->
       <div class="setting-row">
         <div class="setting-label-group">
-          <label class="setting-label">{{ t("wheel_tab_when_press_rbutton") }}</label>
-          <p class="setting-desc">{{ t("wheel_tab_when_press_rbutton_desc") }}</p>
+          <label class="setting-label">{{
+            t("wheel_tab_when_press_rbutton")
+          }}</label>
+          <p class="setting-desc">
+            {{ t("wheel_tab_when_press_rbutton_desc") }}
+          </p>
         </div>
         <div
           :class="[
@@ -134,9 +137,7 @@
       </div>
 
       <!-- Bookmark bar hide delay -->
-      <div
-        v-if="settings.bookmark_bar_auto_hide"
-        class="setting-row">
+      <div v-if="settings.bookmark_bar_auto_hide" class="setting-row">
         <div class="setting-label-group">
           <label class="setting-label">{{
             t("bookmark_bar_auto_hide_delay")
@@ -234,9 +235,9 @@
 
 <script setup>
 import { computed } from "vue";
-import CustomSelect from "../CustomSelect.vue";
-import { useStore } from "../../store.js";
 import { t } from "../../i18n.js";
+import { useStore } from "../../store.js";
+import CustomSelect from "../CustomSelect.vue";
 
 const { settings, saveSettings, toggle } = useStore();
 
@@ -250,5 +251,11 @@ const bookmarkModeOptions = computed(() => [
   { value: 0, label: t("mode_off") },
   { value: 1, label: t("mode_middle_shift") },
   { value: 2, label: t("mode_middle") },
+]);
+
+const keepLastTabOptions = computed(() => [
+  { value: 0, label: t("keep_last_tab_close") },
+  { value: 1, label: t("keep_last_tab_newtab") },
+  { value: 2, label: t("keep_last_tab_ntp") },
 ]);
 </script>

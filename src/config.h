@@ -75,7 +75,8 @@ class Config {
   }
 
   // tabs (ported from chrome_plus tabbookmark)
-  bool IsKeepLastTab() const { return keep_last_tab_; }
+  int GetKeepLastTabMode() const { return keep_last_tab_mode_; }
+  bool IsKeepLastTabEnabled() const { return keep_last_tab_mode_ != 0; }
   bool IsDoubleClickClose() const { return double_click_close_; }
   bool IsRightClickClose() const { return right_click_close_; }
   bool IsWheelTab() const { return wheel_tab_; }
@@ -209,7 +210,7 @@ class Config {
   bool suppress_false_upgrade_notification_;
 
   // tabs (ported from chrome_plus tabbookmark)
-  bool keep_last_tab_ = false;
+  int keep_last_tab_mode_ = 1;
   bool double_click_close_ = false;
   bool right_click_close_ = false;
   bool wheel_tab_ = false;

@@ -19,7 +19,7 @@
 
     <div
       v-if="isOpen"
-      class="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]/95 p-1 shadow-[0_12px_32px_rgba(15,23,42,0.16)] backdrop-blur-sm">
+      class="absolute left-0 top-full z-20 mt-1 min-w-full w-max overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]/95 p-1 shadow-[0_12px_32px_rgba(15,23,42,0.16)] backdrop-blur-sm">
       <button
         v-for="option in options"
         :key="option.value"
@@ -31,7 +31,7 @@
             : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]'
         "
         @click="selectOption(option.value)">
-        <span>{{ option.label }}</span>
+        <span class="whitespace-nowrap">{{ option.label }}</span>
         <Icon
           v-if="selectedValue === option.value"
           name="check"

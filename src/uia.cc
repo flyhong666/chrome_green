@@ -1375,6 +1375,43 @@ bool IsOmniboxFocused() {
   return HasAnyClassName(focused, {L"OmniboxViewViews", L"OmniboxResultView"});
 }
 
+bool IsOmniboxEmptyOrDefault(HWND hwnd) {
+  const UiaSession* session = GetUiaSession();
+  if (!session) {
+    return false;
+  }
+
+  const auto root = GetElementFromWindow(*session, hwnd);
+  if (!root) {
+    return false;
+  }
+
+  ComPtr<IUIAutomationCondition> omnibox_condition;
+  if (!CreateClassCondition(session->automation, L"OmniboxViewViews",
+                            &omnibox_condition) ||
+      !omnibox_condition) {
+    return false;
+  }
+
+  const auto edit = FindFirstDescendantByClass(root, omnibox_condition);
+  if (!edit) {
+    return false;
+  }
+
+  const auto value = GetStringProperty(edit, UIA_ValueValuePropertyId);
+  if (!value) {
+    return false;
+  }
+
+  if (value->empty() || value->starts_with(L"chrome://newtab") ||
+      value->starts_with(L"chrome://new-tab-page") ||
+      value->find(L"搜索") != std::wstring::npos ||
+      value->find(L"Search") != std::wstring::npos) {
+    return true;
+  }
+  return false;
+}
+
 bool IsOnNewTab(HWND hwnd, const std::vector<std::wstring>& extra_tab_names) {
   UiaSession* session = GetUiaSession();
   if (!session) {

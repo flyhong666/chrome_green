@@ -23,6 +23,10 @@ bool SelectTab(const TabHitResult& hit_result);
 [[nodiscard]] bool IsOnTabBar(POINT pt);
 [[nodiscard]] bool IsOnBookmark(POINT pt);
 [[nodiscard]] bool IsOmniboxFocused();
+// True when the omnibox has no meaningful input: empty, the default
+// new-tab URL, or the localized search placeholder. Used to distinguish an
+// idle new-tab page from one where the user is mid-typing.
+[[nodiscard]] bool IsOmniboxEmptyOrDefault(HWND hwnd);
 [[nodiscard]] bool IsOnNewTab(HWND hwnd,
                               const std::vector<std::wstring>& extra_tab_names);
 

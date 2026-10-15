@@ -215,7 +215,7 @@ std::string GetConfigJson() {
   ss << "\"open_config_after_update\":" << (config.IsOpenConfigAfterUpdate() ? "true" : "false") << ",";
   ss << "\"fix_taskbar_menu\":" << (config.IsFixTaskbarMenu() ? "true" : "false") << ",";
   // --- tabs (ported from chrome_plus tabbookmark) ---
-  ss << "\"keep_last_tab\":" << (config.IsKeepLastTab() ? "true" : "false") << ",";
+  ss << "\"keep_last_tab\":" << config.GetKeepLastTabMode() << ",";
   ss << "\"double_click_close\":" << (config.IsDoubleClickClose() ? "true" : "false") << ",";
   ss << "\"right_click_close\":" << (config.IsRightClickClose() ? "true" : "false") << ",";
   ss << "\"wheel_tab\":" << (config.IsWheelTab() ? "true" : "false") << ",";
@@ -416,11 +416,13 @@ std::string HandleRequest(const HttpRequest& req) {
   // Serve the Vue3 config page
   if (req.method == "GET" && (req.path == "/" || req.path == "/config" ||
                                req.path == "/index.html")) {
-    // no-cache: the embedded page is rebuilt with each DLL update, so the
-    // browser must always revalidate (full refetch — we have no validators)
-    // instead of serving a stale heuristic-cached copy that needs Ctrl+F5.
+    // Page is rebuilt on every DLL update. no-store forbids keeping any copy,
+    // so a normal reload always refetches (no ETag/Last-Modified needed).
+    // Pragma + Expires:0 cover older clients.
     return BuildResponse(200, "text/html; charset=utf-8", GetWebContent(),
-                         "Cache-Control: no-cache\r\n");
+                         "Cache-Control: no-store, no-cache, must-revalidate\r\n"
+                         "Pragma: no-cache\r\n"
+                         "Expires: 0\r\n");
   }
 
   // API: get status
@@ -472,7 +474,8 @@ std::string HandleRequest(const HttpRequest& req) {
     std::string key_mappings = JsonGetString(req.body, "key_mappings");
 
     // --- tabs (ported from chrome_plus tabbookmark) ---
-    bool keep_last_tab = JsonGetBool(req.body, "keep_last_tab");
+    int keep_last_tab = JsonGetInt(req.body, "keep_last_tab");
+    if (keep_last_tab < 0 || keep_last_tab > 2) keep_last_tab = 1;
     bool double_click_close = JsonGetBool(req.body, "double_click_close");
     bool right_click_close = JsonGetBool(req.body, "right_click_close");
     bool wheel_tab = JsonGetBool(req.body, "wheel_tab");
@@ -578,7 +581,7 @@ std::string HandleRequest(const HttpRequest& req) {
 
     // --- tabs section (ported from chrome_plus tabbookmark) ---
     WritePrivateProfileStringW(L"tabs", L"keep_last_tab",
-        keep_last_tab ? L"1" : L"0", GetIniPath().c_str());
+        std::to_wstring(keep_last_tab).c_str(), GetIniPath().c_str());
     WritePrivateProfileStringW(L"tabs", L"double_click_close",
         double_click_close ? L"1" : L"0", GetIniPath().c_str());
     WritePrivateProfileStringW(L"tabs", L"right_click_close",

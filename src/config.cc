@@ -81,8 +81,11 @@ void Config::LoadConfig() {
                               GetIniPath().c_str()) != 0;
 
   // tabs (ported from chrome_plus tabbookmark)
-  keep_last_tab_ = ::GetPrivateProfileIntW(L"tabs", L"keep_last_tab", 1,
-                                           GetIniPath().c_str()) != 0;
+  keep_last_tab_mode_ = ::GetPrivateProfileIntW(L"tabs", L"keep_last_tab", 1,
+                                                GetIniPath().c_str());
+  if (keep_last_tab_mode_ < 0 || keep_last_tab_mode_ > 2) {
+    keep_last_tab_mode_ = 1;
+  }
   double_click_close_ = ::GetPrivateProfileIntW(L"tabs", L"double_click_close",
                                                 1, GetIniPath().c_str()) != 0;
   right_click_close_ = ::GetPrivateProfileIntW(L"tabs", L"right_click_close", 0,
@@ -327,7 +330,7 @@ max_total=800
 
 ; 标签页增强（移植自 chrome_plus tabbookmark，在配置页“标签页增强配置”中设置）
 [tabs]
-; 保留至少一个标签页（永不关闭最后一个标签）。0 关闭，1 开启
+; 关闭最后一个标签时的行为：0=关闭浏览器窗口，1=打开一个新标签，2=如果是新标签页则关闭浏览器窗口
 keep_last_tab=1
 ; 双击标签关闭。0 关闭，1 开启
 double_click_close=1
