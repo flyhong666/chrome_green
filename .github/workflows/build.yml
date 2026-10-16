@@ -237,8 +237,15 @@ jobs:
             echo "::warning::GITEE_ACCESS_TOKEN is empty, skipping gitee mirror"
             exit 0
           fi
-          # Fall back to the repo owner so a missing name secret still pushes.
-          GITEE_LOGIN="${GITEE_USER_NAME:-iicm}"
+          # Auth user MUST be the gitee login name (the path segment in
+          # gitee.com/<login>). The account's login name is "iicm" while its
+          # display name is a nickname — gitee rejects a mismatch with
+          # "The token username invalid", so this stays a constant and is
+          # deliberately NOT taken from GITEE_USER_NAME.
+          GITEE_LOGIN="iicm"
+          # Commit identity is display-only, so the nickname and any e-mail
+          # are fine here.
+          GITEE_NAME="${GITEE_USER_NAME:-iicm}"
           GITEE_MAIL="${GITEE_USER_EMAIL:-iicm@users.noreply.github.com}"
           REMOTE="https://${GITEE_LOGIN}:${GITEE_ACCESS_TOKEN}@gitee.com/iicm/chrome_green_release.git"
           WORK="$RUNNER_TEMP/gitee_push"
@@ -247,12 +254,17 @@ jobs:
           cd "$WORK"
           # --global: the identity must be set before the repo exists, so a
           # plain `git config` here would fail with "not in a git directory".
-          git config --global user.name "$GITEE_LOGIN"
+          git config --global user.name "$GITEE_NAME"
           git config --global user.email "$GITEE_MAIL"
+          # Probe auth first: the clone error is swallowed to allow the
+          # empty-repo fallback, which would otherwise mask a 403 and only
+          # resurface at push with a confusing message.
+          if ! git ls-remote "$REMOTE" >/dev/null 2>&1; then
+            echo "::error::Cannot reach the gitee repo with GITEE_ACCESS_TOKEN. The auth user must be the gitee login name 'iicm' (not a nickname or e-mail)."
+            exit 1
+          fi
           # An empty mirror repo cannot be cloned; fall back to a fresh init.
-          if git clone --depth 1 "$REMOTE" repo 2>/dev/null; then
-            cd repo
-          else
+          if ! git clone --depth 1 "$REMOTE" repo 2>/dev/null; then
             mkdir repo && cd repo
             git init -q
             git remote add origin "$REMOTE"
