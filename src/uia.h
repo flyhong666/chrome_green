@@ -34,6 +34,17 @@ bool SelectTab(const TabHitResult& hit_result);
 // dragdrop features that own that setting.
 [[nodiscard]] bool IsOnNewTabPage(HWND hwnd);
 
+// True when `hwnd` is an incognito (off-the-record) window.
+//
+// Chromium keeps incognito state out of every Win32-visible channel - class
+// name, window styles, window properties and the owning process are all shared
+// with regular windows - so the only place it is observable is the automation
+// tree, where the profile / avatar toolbar button carries the localized
+// incognito wording ("无痕模式", "Incognito", ...) only in a private window.
+// The tab strip's "new tab" button is NOT a usable signal: it reports the plain
+// localized NTP name in both window kinds.
+[[nodiscard]] bool IsIncognitoWindow(HWND hwnd);
+
 // Screen rectangle of the tab strip, for hit tests outside a mouse-move loop
 // (resolving it per point during an OLE drag is far too costly).
 [[nodiscard]] std::optional<RECT> GetTabStripRect(HWND hwnd);

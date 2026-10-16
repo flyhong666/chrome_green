@@ -45,6 +45,12 @@ class Config {
   const std::wstring& GetOpenNewWindowHotkey() const { return open_new_window_; }
   const std::wstring& GetOpenUrlGroupHotkey() const { return open_url_group_; }
   const std::vector<std::wstring>& GetUrlGroup() const { return url_group_; }
+  // Opens clipboard content as new tabs: 0 off, 1 extract links, 2 search text,
+  // 3 links + search leftover text.
+  const std::wstring& GetOpenClipboardHotkey() const {
+    return open_clipboard_;
+  }
+  int GetClipboardMode() const { return clipboard_mode_; }
   bool IsShowPassword() const { return show_password_; }
   // Debug-log gate: when false, AddDebugLog() in update.cc is a no-op and the
   // config page hides the Logs tab. Defaults to false (off).
@@ -195,6 +201,8 @@ class Config {
   std::wstring open_new_window_;
   std::wstring open_url_group_;
   std::vector<std::wstring> url_group_;
+  std::wstring open_clipboard_;
+  int clipboard_mode_ = 0;
   bool show_password_ = false;
   bool debug_log_ = false;
   bool suppress_cmdline_warning_ = false;

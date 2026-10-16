@@ -206,6 +206,8 @@ std::string GetConfigJson() {
     }
     ss << "\"url_group\":\"" << JsonEscape(ug) << "\",";
   }
+  ss << "\"open_clipboard\":\"" << JsonEscape(WStringToUtf8(config.GetOpenClipboardHotkey())) << "\",";
+  ss << "\"clipboard_mode\":" << config.GetClipboardMode() << ",";
   ss << "\"win32k\":" << (config.IsWin32K() ? "true" : "false") << ",";
   ss << "\"ignore_policies\":" << (config.IsIgnorePolicies() ? "true" : "false") << ",";
   ss << "\"suppress_false_upgrade_notification\":" << (config.IsSuppressFalseUpgradeNotification() ? "true" : "false") << ",";
@@ -463,6 +465,11 @@ std::string HandleRequest(const HttpRequest& req) {
     std::string open_new_window = JsonGetString(req.body, "open_new_window");
     std::string open_url_group = JsonGetString(req.body, "open_url_group");
     std::string url_group = JsonGetString(req.body, "url_group");
+    std::string open_clipboard = JsonGetString(req.body, "open_clipboard");
+    int clipboard_mode = JsonGetInt(req.body, "clipboard_mode");
+    if (clipboard_mode < 0 || clipboard_mode > 3) {
+      clipboard_mode = 0;
+    }
     bool win32k = JsonGetBool(req.body, "win32k");
     bool ignore_policies = JsonGetBool(req.body, "ignore_policies");
     bool suppress_false = JsonGetBool(req.body, "suppress_false_upgrade_notification");
@@ -562,6 +569,10 @@ std::string HandleRequest(const HttpRequest& req) {
     WritePrivateProfileStringW(L"general", L"open_url_group",
         Utf8ToWstring(open_url_group).c_str(),
         GetIniPath().c_str());
+    WritePrivateProfileStringW(L"general", L"open_clipboard",
+        Utf8ToWstring(open_clipboard).c_str(), GetIniPath().c_str());
+    WritePrivateProfileStringW(L"general", L"clipboard_mode",
+        std::to_wstring(clipboard_mode).c_str(), GetIniPath().c_str());
     WritePrivateProfileStringW(L"general", L"win32k",
         win32k ? L"1" : L"0", GetIniPath().c_str());
     WritePrivateProfileStringW(L"general", L"ignore_policies",

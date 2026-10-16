@@ -72,6 +72,8 @@ const settings = reactive({
   open_new_window: "",
   open_url_group: "",
   url_group: "",
+  open_clipboard: "",
+  clipboard_mode: 0,
   win32k: false,
   ignore_policies: false,
   suppress_false_upgrade_notification: false,

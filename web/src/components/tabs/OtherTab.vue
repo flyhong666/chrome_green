@@ -157,6 +157,26 @@
                 :placeholder="t('url_group_desc')"></textarea>
             </div>
           </div>
+          <div class="setting-row">
+            <div class="setting-label-group">
+              <label class="setting-label">{{ t("action_open_clipboard") }}</label>
+              <p class="setting-desc">{{ t("action_open_clipboard_desc") }}</p>
+            </div>
+            <div class="w-80 max-w-full space-y-2">
+              <KeyInput
+                v-model="settings.open_clipboard"
+                :placeholder="t('action_open_clipboard_ph')"
+                @change="saveSettings" />
+              <div class="flex gap-2">
+                <div class="w-48 shrink-0">
+                  <CustomSelect
+                    v-model="settings.clipboard_mode"
+                    :options="clipboardModeOptions"
+                    @change="() => saveSettings()" />
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <!-- Privacy & Security -->
@@ -420,9 +440,10 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import Icon from "../Icon.vue";
 import KeyInput from "../KeyInput.vue";
+import CustomSelect from "../CustomSelect.vue";
 import { useStore } from "../../store.js";
 import { t } from "../../i18n.js";
 
@@ -460,4 +481,11 @@ const activeGroup = ref("paths");
 
 // Key mappings editor is collapsed by default to keep the tab tidy.
 const showKeymapping = ref(false);
+
+const clipboardModeOptions = computed(() => [
+  { value: 0, label: t("clipboard_mode_off") },
+  { value: 1, label: t("clipboard_mode_links") },
+  { value: 2, label: t("clipboard_mode_search") },
+  { value: 3, label: t("clipboard_mode_both") },
+]);
 </script>

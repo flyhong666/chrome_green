@@ -54,6 +54,13 @@ void Config::LoadConfig() {
     }
     url_group_.push_back(std::move(value));
   }
+  open_clipboard_ = GetIniString(L"general", L"open_clipboard", L"");
+  clipboard_mode_ =
+      GetPrivateProfileIntW(L"general", L"clipboard_mode", 0,
+                            GetIniPath().c_str());
+  if (clipboard_mode_ < 0 || clipboard_mode_ > 3) {
+    clipboard_mode_ = 0;
+  }
   std::wstring theme_w = GetIniString(L"general", L"theme", L"auto");
   theme_ = std::string(theme_w.begin(), theme_w.end());
   std::wstring lang_w = GetIniString(L"general", L"language", L"auto");
@@ -248,6 +255,12 @@ open_new_window=
 
 ; 批量打开一组标签页的快捷键，格式同老板键；按下后按 [url_group] 列表逐个在新标签页打开
 open_url_group=
+
+; 从剪切板打开一组标签页的快捷键，格式同老板键
+open_clipboard=
+
+; 剪切板内容的处理方式。0 关闭，1 提取链接，2 文本搜索（即使是链接也按搜索处理），3 链接+文本搜索
+clipboard_mode=0
 
 ; 免验证查看已保存的密码（无需系统登录密码即可显示密码明文）。0 关闭，1 开启
 show_password=1

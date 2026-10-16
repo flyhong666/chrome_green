@@ -280,6 +280,14 @@ const translations = {
     action_open_url_group_desc:
       "Batch-open the URL list below as new tabs with this hotkey",
     action_open_url_group_ph: "e.g. Ctrl+Shift+U",
+    action_open_clipboard: "Open Clipboard as Tabs",
+    action_open_clipboard_desc:
+      "Open the clipboard content as new tabs with this hotkey",
+    action_open_clipboard_ph: "e.g. Ctrl+Shift+C",
+    clipboard_mode_off: "Off",
+    clipboard_mode_links: "Extract links",
+    clipboard_mode_search: "Search as text",
+    clipboard_mode_both: "Links + search text",
     url_group_desc: "One URL per line, e.g. https://www.google.com",
     show_password: "Show Saved Passwords Without Reauth",
     show_password_desc:
@@ -569,6 +577,14 @@ const translations = {
     action_open_url_group_desc:
       "按下快捷键后，按下方列表逐个在新标签页打开这些网址",
     action_open_url_group_ph: "例如 Ctrl+Shift+U",
+    action_open_clipboard: "从剪切板打开标签页",
+    action_open_clipboard_desc:
+      "按下快捷键后，把剪切板内容按下方方式在新标签页打开",
+    action_open_clipboard_ph: "例如 Ctrl+Shift+C",
+    clipboard_mode_off: "关闭",
+    clipboard_mode_links: "提取链接",
+    clipboard_mode_search: "文本搜索",
+    clipboard_mode_both: "链接 + 文本搜索",
     url_group_desc: "每行一个网址，例如 https://www.google.com",
     show_password: "免验证查看已保存密码",
     show_password_desc: "无需验证系统登录密码即可查看已保存的密码",
