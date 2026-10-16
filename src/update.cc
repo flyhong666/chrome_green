@@ -9,6 +9,7 @@
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <cerrno>
@@ -840,17 +841,29 @@ UpdateInfo CheckForUpdates(UpdateChannel channel, UpdateArch arch,
 // Forward declaration — BuildGhProxyUrl is defined later (near DownloadSelfUpdate).
 static std::string BuildGhProxyUrl(const std::string& proxy,
                                    const std::string& url);
+
+// GH_PROXY mirrors only GitHub, so it is meaningless for the Gitee channel.
+// There we fall back to a direct connection. HTTP/SOCKS5 are generic proxies
+// and keep working.
+static bool GhProxyApplies(SelfUpdateChannel self_channel,
+                           const std::string& proxy_type) {
+  return !(self_channel == SelfUpdateChannel::kGitee &&
+           proxy_type == "GH_PROXY");
+}
+
 static bool CheckFetchTarget(HINTERNET hSession,
                              const std::string& url,
                              const std::string& proxy,
                              const std::string& proxy_type,
+                             SelfUpdateChannel self_channel,
                              std::string& out_host,
                              std::string& out_path) {
   std::string effective = url;
-  if (proxy_type == "GH_PROXY" && !proxy.empty()) {
+  if (proxy_type == "GH_PROXY" && !proxy.empty() &&
+      GhProxyApplies(self_channel, proxy_type)) {
     effective = BuildGhProxyUrl(proxy, url);
     AddDebugLog("GH_PROXY check URL: " + effective);
-  } else if (!proxy.empty()) {
+  } else if (!proxy.empty() && proxy_type != "GH_PROXY") {
     std::wstring proxy_w(proxy.begin(), proxy.end());
     if (proxy_type == "HTTP" && proxy_w.find(L"http") == std::wstring::npos) {
       proxy_w = L"http://" + proxy_w;
@@ -933,6 +946,15 @@ static int CompareSemver(const std::string& a, const std::string& b) {
 static const char* kReleaseIndexBase =
     "https://github.com/libsgh/ghapi-json-generator/raw/refs/heads/output/v2/"
     "repos/libsgh/chrome_green/releases%3Fper_page=10/data.json";
+
+// Gitee mirror of the same release payload. version.json is a small object
+// written by the release workflow:
+//   {"version":"2.1.0","url":"<zip url>","size":12345,"published_at":"..."}
+// The zip keeps a fixed name (ChromeGreen.zip) and is overwritten each release.
+static const char* kGiteeIndexBase =
+    "https://gitee.com/iicm/chrome_green_release/raw/master/version.json";
+static const char* kGiteeZipFallback =
+    "https://gitee.com/iicm/chrome_green_release/raw/master/ChromeGreen.zip";
 
 // Minimal string-search JSON helpers (no external parser dependency).
 
@@ -1118,19 +1140,20 @@ static bool ParseReleaseIndex(const std::string& body, UpdateInfo& info) {
   return true;
 }
 
-// Fetch the static release-index JSON and parse it.
-static UpdateInfo FetchSelfUpdateIndex(const std::string& proxy,
-                                       const std::string& proxy_type) {
-  UpdateInfo info;
-
+// Shared WinHTTP GET for the self-update metadata fetches (both channels).
+static bool HttpGetText(const std::string& url,
+                        const std::string& proxy,
+                        const std::string& proxy_type,
+                        SelfUpdateChannel self_channel,
+                        std::string* out_body) {
   HINTERNET hSession = WinHttpOpen(L"ChromeGreen SelfUpdate",
       WINHTTP_ACCESS_TYPE_NO_PROXY, WINHTTP_NO_PROXY_NAME,
       WINHTTP_NO_PROXY_BYPASS, 0);
-  if (!hSession) return info;
+  if (!hSession) return false;
 
   std::string host, path;
-  bool https = CheckFetchTarget(hSession, kReleaseIndexBase,
-                                proxy, proxy_type, host, path);
+  bool https = CheckFetchTarget(hSession, url, proxy, proxy_type,
+                                self_channel, host, path);
   WinHttpSetTimeouts(hSession, 10000, 10000, 10000, 10000);
 
   HINTERNET hConnect = WinHttpConnect(hSession, Utf8ToWstr(host).c_str(),
@@ -1139,7 +1162,7 @@ static UpdateInfo FetchSelfUpdateIndex(const std::string& proxy,
                                       0);
   if (!hConnect) {
     WinHttpCloseHandle(hSession);
-    return info;
+    return false;
   }
 
   HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET",
@@ -1149,7 +1172,7 @@ static UpdateInfo FetchSelfUpdateIndex(const std::string& proxy,
   if (!hRequest) {
     WinHttpCloseHandle(hConnect);
     WinHttpCloseHandle(hSession);
-    return info;
+    return false;
   }
 
   WinHttpAddRequestHeaders(hRequest,
@@ -1157,17 +1180,12 @@ static UpdateInfo FetchSelfUpdateIndex(const std::string& proxy,
       (DWORD)-1, WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE);
 
   if (!WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
-                          WINHTTP_NO_REQUEST_DATA, 0, 0, 0)) {
+                          WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
+      !WinHttpReceiveResponse(hRequest, nullptr)) {
     WinHttpCloseHandle(hRequest);
     WinHttpCloseHandle(hConnect);
     WinHttpCloseHandle(hSession);
-    return info;
-  }
-  if (!WinHttpReceiveResponse(hRequest, nullptr)) {
-    WinHttpCloseHandle(hRequest);
-    WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
-    return info;
+    return false;
   }
 
   std::string body;
@@ -1188,8 +1206,80 @@ static UpdateInfo FetchSelfUpdateIndex(const std::string& proxy,
   WinHttpCloseHandle(hConnect);
   WinHttpCloseHandle(hSession);
 
+  *out_body = body;
+  return true;
+}
+
+// Fetch the static release-index JSON and parse it.
+static UpdateInfo FetchSelfUpdateIndex(const std::string& proxy,
+                                       const std::string& proxy_type) {
+  UpdateInfo info;
+  std::string body;
+  if (!HttpGetText(kReleaseIndexBase, proxy, proxy_type,
+                   SelfUpdateChannel::kGitHub, &body)) {
+    AddDebugLog("Self-update check failed: could not fetch release index");
+    return info;
+  }
   if (!ParseReleaseIndex(body, info)) {
     AddDebugLog("Self-update check failed: could not parse release index");
+  }
+  return info;
+}
+
+// Parse the Gitee version.json. Same contract as ParseReleaseIndex: fill
+// version/urls/size and let CompareSemver decide has_update.
+static bool ParseGiteeVersion(const std::string& body, UpdateInfo& info) {
+  if (body.empty()) return false;
+
+  std::string ver = JsonStringField(body, "version");
+  if (ver.empty()) {
+    AddDebugLog("Gitee parse: version.json has no \"version\" field");
+    return false;
+  }
+  if (ver[0] == 'v') ver = ver.substr(1);
+
+  std::string url = JsonStringField(body, "url");
+  if (url.empty()) url = kGiteeZipFallback;
+
+  long long size = 0;
+  JsonIntField(body, "size", size);
+
+  info.version = ver;
+  info.urls.assign(1, url);
+  info.size = size;
+  info.has_update = CompareSemver(ver, RELEASE_VER_STR) > 0;
+
+  if (info.has_update) {
+    AddDebugLog("Self-update: gitee remote " + ver + " > local " +
+                std::string(RELEASE_VER_STR) + " -> update available");
+  } else {
+    AddDebugLog("Self-update: gitee local " + std::string(RELEASE_VER_STR) +
+                " is current (remote " + ver + ") -> no update");
+    info.urls.clear();
+    info.size = 0;
+  }
+  return true;
+}
+
+// Fetch version.json from the Gitee mirror. A cache-busting query is appended
+// because raw/master is served through a CDN and would otherwise return a
+// stale copy after a release.
+static UpdateInfo FetchGiteeIndex(const std::string& proxy,
+                                  const std::string& proxy_type) {
+  UpdateInfo info;
+  char stamp[32];
+  snprintf(stamp, sizeof(stamp), "?_=%lld",
+           static_cast<long long>(time(nullptr)));
+  std::string url = std::string(kGiteeIndexBase) + stamp;
+
+  std::string body;
+  if (!HttpGetText(url, proxy, proxy_type, SelfUpdateChannel::kGitee,
+                   &body)) {
+    AddDebugLog("Self-update check failed: could not fetch gitee version.json");
+    return info;
+  }
+  if (!ParseGiteeVersion(body, info)) {
+    AddDebugLog("Self-update check failed: could not parse gitee version.json");
   }
   return info;
 }
@@ -1209,7 +1299,19 @@ static UpdateInfo FetchSelfUpdateIndex(const std::string& proxy,
 // the locally compiled RELEASE_VER_STR and only flag has_update when the
 // published version is strictly greater.
 UpdateInfo CheckSelfUpdate(const std::string& proxy,
-                          const std::string& proxy_type) {
+                          const std::string& proxy_type,
+                          SelfUpdateChannel self_channel) {
+  if (self_channel == SelfUpdateChannel::kGitee) {
+    AddDebugLog("Self-update check started (gitee)" +
+                (proxy.empty() ? "" : ", proxy: " + proxy));
+    UpdateInfo gitee_info = FetchGiteeIndex(proxy, proxy_type);
+    if (gitee_info.version.empty()) {
+      AddDebugLog("Self-update check failed: no gitee version.json version");
+      return gitee_info;  // has_update stays false
+    }
+    return gitee_info;
+  }
+
   AddDebugLog("Self-update check started (release index)" +
               (proxy.empty() ? "" : ", proxy: " + proxy));
 
@@ -1329,18 +1431,24 @@ bool DownloadSelfUpdate(const std::string& url,
                         const std::wstring& save_path,
                         const std::wstring& extract_dir,
                         const std::string& proxy,
-                        const std::string& proxy_type) {
+                        const std::string& proxy_type,
+                        SelfUpdateChannel self_channel) {
   // GH_PROXY: accelerate GitHub *release* downloads by rewriting the URL to go
   // through a public GitHub proxy (e.g. https://gh.noki.eu.org). The proxy host
   // is baked into the URL itself, so we do NOT set a WinHTTP proxy. This type
   // ONLY proxies GitHub release URLs — Chrome installer downloads never use it
-  // (see downloader.cc DownloadThread).
+  // (see downloader.cc DownloadThread), and neither does the Gitee channel.
   std::string effective_url = url;
   std::string effective_proxy = proxy;
-  if (proxy_type == "GH_PROXY") {
+  if (proxy_type == "GH_PROXY" && GhProxyApplies(self_channel, proxy_type)) {
     effective_url = BuildGhProxyUrl(proxy, url);
     effective_proxy.clear();
     AddDebugLog("GH_PROXY self-update download URL: " + effective_url);
+  } else if (proxy_type == "GH_PROXY") {
+    // GH_PROXY holds a mirror base URL, not a proxy address — clearing it
+    // avoids feeding that URL to WinHTTP as a named proxy below.
+    effective_proxy.clear();
+    AddDebugLog("GH_PROXY skipped for the gitee self-update channel");
   }
 
   HINTERNET hSession = WinHttpOpen(

@@ -23,6 +23,12 @@ enum class UpdateArch {
   kARM64,
 };
 
+// Where ChromeGreen's own version.dll updates come from.
+enum class SelfUpdateChannel {
+  kGitHub = 0,  // GitHub Releases via the ghapi-json-generator static index
+  kGitee = 1,   // gitee.com/iicm/chrome_green_release/version.json
+};
+
 // Information about an available Chrome update
 struct UpdateInfo {
   std::string version;           // e.g. "132.0.6834.59"
@@ -122,11 +128,15 @@ const char* GetAppId(UpdateChannel channel);
 // e.g. "x64-stable-statsdef_1", "arm64-beta-statsdef_1"
 std::string GetApParameter(UpdateChannel channel, UpdateArch arch);
 
-// Self-update: check GitHub Releases for new chrome_green version.
+// Self-update: check for a new chrome_green version.
 // Returns UpdateInfo with has_update=true if a newer version is available.
 // proxy/proxy_type: empty means no proxy (does NOT use system proxy).
+// self_channel: GitHub Releases or the Gitee mirror. GH_PROXY only applies to
+// the GitHub channel.
 UpdateInfo CheckSelfUpdate(const std::string& proxy = "",
-                          const std::string& proxy_type = "");
+                          const std::string& proxy_type = "",
+                          SelfUpdateChannel self_channel =
+                              SelfUpdateChannel::kGitHub);
 
 // Self-update: download the new release zip and extract version.dll.
 // proxy/proxy_type: empty means no proxy.
@@ -134,7 +144,9 @@ bool DownloadSelfUpdate(const std::string& url,
                         const std::wstring& save_path,
                         const std::wstring& extract_dir,
                         const std::string& proxy = "",
-                        const std::string& proxy_type = "");
+                        const std::string& proxy_type = "",
+                        SelfUpdateChannel self_channel =
+                            SelfUpdateChannel::kGitHub);
 
 // Save/load self-update state
 void SaveSelfUpdateState();

@@ -57,6 +57,7 @@ const settings = reactive({
   proxy_type: "HTTP",
   proxy_chrome_download: false,
   download_source: 1,
+  self_update_channel: 1,
   theme: "auto",
   language: "auto",
   // general (portable / launch / hotkeys)
@@ -214,6 +215,12 @@ const proxyTypeOptions = computed(() => [
   { value: "HTTP", label: "HTTP" },
   { value: "SOCKS5", label: "SOCKS5" },
   { value: "GH_PROXY", label: "GH_PROXY" },
+]);
+// Source for ChromeGreen's own version.dll updates. GH_PROXY does not apply
+// to the Gitee option.
+const selfUpdateChannelOptions = computed(() => [
+  { value: 0, label: "GitHub" },
+  { value: 1, label: "Gitee" },
 ]);
 let logPollTimer = null;
 const logPollingInterval = 5000;
@@ -485,11 +492,14 @@ async function saveSettings(forceRecheck = false) {
     await api.updateConfig(settings);
     await refreshConfig();
     await refreshStatus();
-    // When channel or download_source changes, reset state and re-check
+    // When channel / download_source / self_update_channel changes, reset state
+    // and re-check. Switching the ChromeGreen source also re-runs the
+    // self-update check so the new channel takes effect right away.
     if (recheck) {
       await api.resetUpdate();
       await refreshStatus();
       await checkUpdate();
+      await checkSelfUpdate();
     }
     showToast(t("save_success"), "success");
   } catch (e) {
@@ -958,6 +968,7 @@ export function useStore() {
     channelOptions,
     checkIntervalOptions,
     proxyTypeOptions,
+    selfUpdateChannelOptions,
     version,
     githubUrl,
     themeClass,

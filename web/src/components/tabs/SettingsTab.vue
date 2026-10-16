@@ -65,6 +65,19 @@
 
       <div class="setting-row">
         <div class="setting-label-group">
+          <label class="setting-label">{{ t("self_update_channel") }}</label>
+          <p class="setting-desc">{{ t("self_update_channel_desc") }}</p>
+        </div>
+        <div class="w-36">
+          <CustomSelect
+            v-model="settings.self_update_channel"
+            :options="selfUpdateChannelOptions"
+            @change="() => saveSettings(true)" />
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-label-group">
           <label class="setting-label">{{ t("auto_check") }}</label>
           <p class="setting-desc">{{ t("auto_check_desc") }}</p>
         </div>
@@ -143,6 +156,12 @@ import CustomSelect from "../CustomSelect.vue";
 import { useStore } from "../../store.js";
 import { t } from "../../i18n.js";
 
-const { settings, channelOptions, checkIntervalOptions, saveSettings, toggle } =
-  useStore();
+const {
+  settings,
+  channelOptions,
+  checkIntervalOptions,
+  selfUpdateChannelOptions,
+  saveSettings,
+  toggle,
+} = useStore();
 </script>

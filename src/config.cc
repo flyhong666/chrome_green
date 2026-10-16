@@ -146,6 +146,10 @@ void Config::LoadConfig() {
                               GetIniPath().c_str()) != 0;
   download_source_ = ::GetPrivateProfileIntW(L"update", L"download_source", 1,
                                               GetIniPath().c_str());
+  self_update_channel_ =
+      ::GetPrivateProfileIntW(L"update", L"self_update_channel", 1,
+                              GetIniPath().c_str());
+  if (self_update_channel_ != 0) self_update_channel_ = 1;
   // Auto-detect architecture from the running process
   update_arch_ = DetectArch();
 
@@ -321,6 +325,9 @@ proxy_type=HTTP
 proxy_chrome_download=0
 ; 下载源：0=edgedl 1=dl.google.com(默认) 2=www.google.com 3=redirector.gvt1.com
 download_source=1
+; ChromeGreen 自身（version.dll）更新源：0 = GitHub，1 = Gitee（默认）
+; Gitee 通道下 GH_PROXY 代理不生效（该镜像仅代理 GitHub）
+self_update_channel=1
 
 ; 域名映射（仅作用于 Chrome 自身，不影响系统 hosts 文件或其它程序）
 ; 通过 Chromium --host-resolver-rules 在启动参数注入，需重启 Chrome 生效

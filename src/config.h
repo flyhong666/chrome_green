@@ -140,6 +140,9 @@ class Config {
   const std::string& GetUpdateProxyType() const { return update_proxy_type_; }
   bool ProxyChromeDownload() const { return proxy_chrome_download_; }
   int GetDownloadSource() const { return download_source_; }
+  // Where ChromeGreen's own version.dll updates come from:
+  // 0 = GitHub Releases, 1 = Gitee (default).
+  int GetSelfUpdateChannel() const { return self_update_channel_; }
   // Architecture is auto-detected from the system, not user-configurable
   static UpdateArch DetectArch();
 
@@ -255,6 +258,7 @@ class Config {
   std::string update_proxy_type_ = "HTTP";
   bool proxy_chrome_download_ = false;
   int download_source_ = 1;  // 0=edgedl, 1=dl.google.com (default), 2=www.google.com
+  int self_update_channel_ = 1;  // 0=GitHub, 1=Gitee (default)
 };
 
 extern const Config& config;
