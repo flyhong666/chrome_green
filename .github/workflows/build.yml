@@ -245,8 +245,10 @@ jobs:
           rm -rf "$WORK"
           mkdir -p "$WORK"
           cd "$WORK"
-          git config user.name "$GITEE_LOGIN"
-          git config user.email "$GITEE_MAIL"
+          # --global: the identity must be set before the repo exists, so a
+          # plain `git config` here would fail with "not in a git directory".
+          git config --global user.name "$GITEE_LOGIN"
+          git config --global user.email "$GITEE_MAIL"
           # An empty mirror repo cannot be cloned; fall back to a fresh init.
           if git clone --depth 1 "$REMOTE" repo 2>/dev/null; then
             cd repo
