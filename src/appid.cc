@@ -873,7 +873,6 @@ static void RegisterTasks(const std::wstring& aumid) {
                                      CLSCTX_ALL, IID_IObjectCollection,
                                      (void**)&recent_objs);
       if (SUCCEEDED(rhr) && recent_objs) {
-        int faviconsUsed = 0;
         for (int i = 0; i < rcnt; ++i) {
           IShellLinkW* rsl = nullptr;
           if (FAILED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_ALL,
@@ -897,7 +896,6 @@ static void RegisterTasks(const std::wstring& aumid) {
               std::wstring icoPath = WriteFaviconIco(favicon_png, i);
               if (!icoPath.empty()) {
                 rsl->SetIconLocation(icoPath.c_str(), 0);
-                faviconsUsed++;
               }
             }
           }
@@ -928,11 +926,7 @@ static void RegisterTasks(const std::wstring& aumid) {
         IObjectArray* roa = nullptr;
         if (SUCCEEDED(recent_objs->QueryInterface(IID_IObjectArray,
                                                   (void**)&roa))) {
-          HRESULT ahr = pdl->AppendCategory(lbl_recent, roa);
-          AddDebugLog("appid: Recent category items=" + std::to_string(rcnt) +
-                      " favicons=" + std::to_string(faviconsUsed) +
-                      " name=" + WstrToUtf8(lbl_recent) +
-                      " append_hr=" + std::to_string(static_cast<long>(ahr)));
+          pdl->AppendCategory(lbl_recent, roa);
           roa->Release();
         }
         recent_objs->Release();
