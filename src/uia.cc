@@ -975,22 +975,13 @@ std::optional<TabHitResult> BuildTabHitResult(const UiaSession& session,
 std::optional<std::wstring> GetNewTabButtonName(
     const UiaSession& session,
     const ComPtr<IUIAutomationElement>& region) {
-  static std::optional<std::wstring> cached_name;
-  if (cached_name.has_value()) {
-    return cached_name;
-  }
-
   const auto button = FindFirstDescendantByClass(
       region, session.class_conditions.tab_strip_control_button);
   if (!button) {
     return std::nullopt;
   }
 
-  auto name = GetStringProperty(button, UIA_NamePropertyId);
-  if (name && !name->empty()) {
-    cached_name = name;
-  }
-  return cached_name;
+  return GetStringProperty(button, UIA_NamePropertyId);
 }
 
 ComPtr<IUIAutomationElement> FindBookmarkInAnchor(
@@ -1443,6 +1434,63 @@ bool IsOnNewTab(HWND hwnd, const std::vector<std::wstring>& extra_tab_names) {
   for (size_t i = 0; i < extra_tab_names.size(); ++i) {
     if (!extra_tab_names[i].empty() &&
         selected_name->contains(extra_tab_names[i])) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// keep_last_tab mode 2 only. Detects an idle new-tab page through the live
+// new-tab button name (language-agnostic for normal NTP) plus a built-in
+// common-locale fallback for incognito variants whose title is not a
+// substring of the button name. Intentionally does NOT consult
+// `new_tab_disable_name` so this detection cannot alter the bookmark / url /
+// dragdrop features that own that config.
+bool IsOnNewTabPage(HWND hwnd) {
+  UiaSession* session = GetUiaSession();
+  if (!session) {
+    return false;
+  }
+
+  RECT region_rect;
+  TabUiCache* ui = GetValidatedTabUi(session, hwnd, &region_rect);
+  if (!ui) {
+    return false;
+  }
+
+  const auto selected_tab = FindSelectedTabElement(*session, ui->container);
+  if (!selected_tab) {
+    return false;
+  }
+
+  const auto selected_name =
+      GetStringProperty(selected_tab, UIA_NamePropertyId);
+  if (!selected_name) {
+    return false;
+  }
+
+  const auto std_name = GetNewTabButtonName(*session, ui->region);
+  if (std_name && selected_name->contains(*std_name)) {
+    return true;
+  }
+
+  // Verified against Chrome's own Locales/<lang>.pak resources. Each locale
+  // contributes its new-tab title plus the incognito variant, whose title is
+  // not a substring of the new-tab button name in most languages.
+  static const std::wstring_view kKnownNtpTitles[] = {
+      L"新标签页",         L"新的无痕式标签页",  // zh-CN
+      L"新分頁",           L"新無痕分頁",        // zh-TW
+      L"New Tab",          L"New Incognito Tab",  // en-US
+      L"新しいタブ",        L"新しいシークレット タブ",  // ja
+      L"새 탭",            L"새 시크릿 탭",       // ko
+      L"Neuer Tab",        L"Neuer Inkognitotab",  // de
+      L"Nouvel onglet",    L"Nouvel onglet de navigation privée",  // fr
+      L"Nueva pestaña",    L"Nueva pestaña de Incógnito",           // es
+      L"Новая вкладка",    L"Новая вкладка инкогнито",             // ru
+  };
+  for (const auto& t : kKnownNtpTitles) {
+    if (selected_name->contains(t)) {
       return true;
     }
   }

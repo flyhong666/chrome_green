@@ -29,6 +29,10 @@ bool SelectTab(const TabHitResult& hit_result);
 [[nodiscard]] bool IsOmniboxEmptyOrDefault(HWND hwnd);
 [[nodiscard]] bool IsOnNewTab(HWND hwnd,
                               const std::vector<std::wstring>& extra_tab_names);
+// keep_last_tab mode 2 only: detects an idle new-tab page WITHOUT the shared
+// `new_tab_disable_name` config, so it cannot leak into the bookmark / url /
+// dragdrop features that own that setting.
+[[nodiscard]] bool IsOnNewTabPage(HWND hwnd);
 
 // Screen rectangle of the tab strip, for hit tests outside a mouse-move loop
 // (resolving it per point during an OLE drag is far too costly).

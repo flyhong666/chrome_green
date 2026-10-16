@@ -86,8 +86,9 @@ bool ShouldKeepLastTab(HWND hwnd, int tab_count, KeepTabTrigger trigger) {
   }
   // Last remaining tab: close the window only when it is an idle new-tab
   // page. If the user is mid-typing in the omnibox, keep the window so the
-  // in-progress input is not discarded.
-  if (IsOnNewTab(hwnd, config.GetDisableTabNames()) &&
+  // in-progress input is not discarded. Uses IsOnNewTabPage (not the shared
+  // new_tab_disable_name config) so bookmark / url / dragdrop are unaffected.
+  if (IsOnNewTabPage(hwnd) &&
       (!IsOmniboxFocused() || IsOmniboxEmptyOrDefault(hwnd))) {
     return false;
   }
@@ -334,12 +335,14 @@ bool HandleDoubleClick(const MOUSEHOOKSTRUCT* pmouse) {
 
   const POINT pt = pmouse->pt;
   HWND hwnd = WindowFromPoint(pt);
+  const HWND root = hwnd ? GetAncestor(hwnd, GA_ROOT) : nullptr;
   const auto hit = FindTabHitResult(pt, config.IsKeepLastTabEnabled(), true);
   if (!hit || hit->on_close_button) {
     return false;
   }
   if (hit->tab_count == 1) {
-    if (ShouldKeepLastTab(hwnd, hit->tab_count, KeepTabTrigger::kDoubleClick)) {
+    if (ShouldKeepLastTab(root ? root : hwnd, hit->tab_count,
+                          KeepTabTrigger::kDoubleClick)) {
       ExecuteCommand(IDC_NEW_TAB, hwnd);
       ExecuteCommand(IDC_WINDOW_CLOSE_OTHER_TABS, hwnd);
     } else {
@@ -359,11 +362,13 @@ bool HandleRightClick(const MOUSEHOOKSTRUCT* pmouse) {
 
   const POINT pt = pmouse->pt;
   HWND hwnd = WindowFromPoint(pt);
+  const HWND root = hwnd ? GetAncestor(hwnd, GA_ROOT) : nullptr;
   const auto hit = FindTabHitResult(pt, config.IsKeepLastTabEnabled(), false);
   if (!hit) {
     return false;
   }
-  if (ShouldKeepLastTab(hwnd, hit->tab_count, KeepTabTrigger::kRightClick)) {
+  if (ShouldKeepLastTab(root ? root : hwnd, hit->tab_count,
+                        KeepTabTrigger::kRightClick)) {
     ExecuteCommand(IDC_NEW_TAB, hwnd);
     ExecuteCommand(IDC_WINDOW_CLOSE_OTHER_TABS, hwnd);
   } else {
@@ -382,12 +387,14 @@ bool HandleMiddleClick(const MOUSEHOOKSTRUCT* pmouse) {
 
   const POINT pt = pmouse->pt;
   HWND hwnd = WindowFromPoint(pt);
+  const HWND root = hwnd ? GetAncestor(hwnd, GA_ROOT) : nullptr;
   const auto hit = FindTabHitResult(pt, config.IsKeepLastTabEnabled(), false);
   if (!hit) {
     return false;
   }
 
-  if (ShouldKeepLastTab(hwnd, hit->tab_count, KeepTabTrigger::kMiddleClick)) {
+  if (ShouldKeepLastTab(root ? root : hwnd, hit->tab_count,
+                        KeepTabTrigger::kMiddleClick)) {
     ExecuteCommand(IDC_NEW_TAB, hwnd);
     ExecuteCommand(IDC_WINDOW_CLOSE_OTHER_TABS, hwnd);
     return true;
@@ -402,11 +409,13 @@ bool HandleCloseButton(const MOUSEHOOKSTRUCT* pmouse) {
 
   const POINT pt = pmouse->pt;
   HWND hwnd = WindowFromPoint(pt);
+  const HWND root = hwnd ? GetAncestor(hwnd, GA_ROOT) : nullptr;
   const auto hit = FindTabHitResult(pt, config.IsKeepLastTabEnabled(), true);
   if (!hit || !hit->on_close_button) {
     return false;
   }
-  if (!ShouldKeepLastTab(hwnd, hit->tab_count, KeepTabTrigger::kCloseButton)) {
+  if (!ShouldKeepLastTab(root ? root : hwnd, hit->tab_count,
+                         KeepTabTrigger::kCloseButton)) {
     return false;
   }
   ExecuteCommand(IDC_NEW_TAB, hwnd);
