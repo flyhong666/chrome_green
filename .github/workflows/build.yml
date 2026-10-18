@@ -270,6 +270,7 @@ jobs:
             git remote add origin "$REMOTE"
             git checkout -q -b master
           fi
+          cd "$WORK/repo"
           cp "$GITHUB_WORKSPACE/gitee_payload/ChromeGreen.zip" ./ChromeGreen.zip
           cp "$GITHUB_WORKSPACE/gitee_payload/version.json" ./version.json
           rm -f ChromeGreen_v*.zip
