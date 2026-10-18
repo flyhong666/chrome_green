@@ -142,6 +142,11 @@ void ExecuteCommand(int id, HWND hwnd = 0);
 void SendString(const std::wstring& str);
 void LaunchCommands(const std::wstring& get_commands);
 [[nodiscard]] bool IsChromeWindow(HWND hwnd);
+// Post WM_CLOSE to every visible top-level browser window of THIS install —
+// the same path Chrome itself uses for a user exit (CloseAllBrowsers), so
+// Chrome runs beforeunload / session save and writes exit_type=Normal.
+// Returns the number of windows signalled.
+int RequestBrowserShutdown();
 
 // Keyboard and mouse input functions
 // Template function for sending combined key operations - kept in header

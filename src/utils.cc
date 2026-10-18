@@ -345,6 +345,64 @@ void LaunchCommands(const std::wstring& get_commands) {
 
 namespace {
 
+struct ShutdownScan {
+  int count = 0;
+};
+
+BOOL CALLBACK RequestShutdownEnumProc(HWND hwnd, LPARAM param) {
+  auto* scan = reinterpret_cast<ShutdownScan*>(param);
+  if (::GetParent(hwnd) != nullptr) {
+    return TRUE;  // skip owned/child windows
+  }
+  if (!::IsWindowVisible(hwnd)) {
+    return TRUE;
+  }
+  std::array<wchar_t, 64> class_name{};
+  const int len = ::GetClassNameW(hwnd, class_name.data(),
+                                  static_cast<int>(class_name.size()));
+  if (len == 0) {
+    return TRUE;
+  }
+  if (std::wstring_view(class_name.data(), static_cast<size_t>(len)) !=
+      L"Chrome_WidgetWin_1") {
+    return TRUE;  // browser frames only
+  }
+  DWORD pid = 0;
+  ::GetWindowThreadProcessId(hwnd, &pid);
+  if (pid == 0) {
+    return TRUE;
+  }
+  std::wstring exe;
+  HANDLE process =
+      ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+  if (process != nullptr) {
+    wchar_t path[MAX_PATH];
+    DWORD size = MAX_PATH;
+    if (::QueryFullProcessImageNameW(process, 0, path, &size)) {
+      exe.assign(path, size);
+    }
+    ::CloseHandle(process);
+  }
+  // Scope to this install so other Chromes are never touched.
+  const std::wstring want = GetAppDir() + L"\\chrome.exe";
+  if (exe.empty() || ::lstrcmpiW(exe.c_str(), want.c_str()) != 0) {
+    return TRUE;
+  }
+  ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
+  ++scan->count;
+  return TRUE;
+}
+
+}  // namespace
+
+int RequestBrowserShutdown() {
+  ShutdownScan scan;
+  ::EnumWindows(RequestShutdownEnumProc, reinterpret_cast<LPARAM>(&scan));
+  return scan.count;
+}
+
+namespace {
+
 // Modifier keys mapping
 constexpr std::pair<std::wstring_view, UINT> kModifierKeys[] = {
     {L"shift", MOD_SHIFT},     {L"ctrl", MOD_CONTROL},

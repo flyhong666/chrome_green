@@ -143,6 +143,15 @@ class Config {
   // Where ChromeGreen's own version.dll updates come from:
   // 0 = GitHub Releases, 1 = Gitee (default).
   int GetSelfUpdateChannel() const { return self_update_channel_; }
+  // On update, close Chrome gracefully (WM_CLOSE to all browser windows, wait
+  // for a natural exit) before force-killing leftovers. ON by default.
+  bool IsGracefulClose() const { return graceful_close_; }
+  int GetGracefulCloseTimeout() const { return graceful_close_timeout_; }
+  // Relaunch after an update with --restore-last-session (restores the last
+  // session regardless of the "on startup" setting). ON by default.
+  bool IsRestoreSessionAfterUpdate() const {
+    return restore_session_after_update_;
+  }
   // Architecture is auto-detected from the system, not user-configurable
   static UpdateArch DetectArch();
 
@@ -259,6 +268,9 @@ class Config {
   bool proxy_chrome_download_ = false;
   int download_source_ = 1;  // 0=edgedl, 1=dl.google.com (default), 2=www.google.com
   int self_update_channel_ = 1;  // 0=GitHub, 1=Gitee (default)
+  bool graceful_close_ = true;
+  int graceful_close_timeout_ = 30;  // seconds, total budget
+  bool restore_session_after_update_ = true;
 };
 
 extern const Config& config;

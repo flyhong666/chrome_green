@@ -150,6 +150,16 @@ void Config::LoadConfig() {
       ::GetPrivateProfileIntW(L"update", L"self_update_channel", 1,
                               GetIniPath().c_str());
   if (self_update_channel_ != 0) self_update_channel_ = 1;
+  graceful_close_ = ::GetPrivateProfileIntW(L"update", L"graceful_close", 1,
+                                            GetIniPath().c_str()) != 0;
+  graceful_close_timeout_ =
+      ::GetPrivateProfileIntW(L"update", L"graceful_close_timeout", 30,
+                              GetIniPath().c_str());
+  if (graceful_close_timeout_ < 5) graceful_close_timeout_ = 5;
+  if (graceful_close_timeout_ > 120) graceful_close_timeout_ = 120;
+  restore_session_after_update_ =
+      ::GetPrivateProfileIntW(L"update", L"restore_session_after_update", 1,
+                              GetIniPath().c_str()) != 0;
   // Auto-detect architecture from the running process
   update_arch_ = DetectArch();
 
@@ -328,6 +338,14 @@ download_source=1
 ; ChromeGreen 自身（version.dll）更新源：0 = GitHub，1 = Gitee（默认）
 ; Gitee 通道下 GH_PROXY 代理不生效（该镜像仅代理 GitHub）
 self_update_channel=1
+; 更新时先正常关闭 Chrome（向所有浏览器窗口发送关闭请求，等待其自然退出），
+; 超时或失败后再强制结束；可避免下次启动弹出“未正常关闭/恢复”提示。0 关闭，1 开启
+graceful_close=1
+; 等待 Chrome 自然退出的最长时间（秒，5-120）；期间“离开网站”确认框会等待用户操作
+graceful_close_timeout=30
+; 更新重启后恢复上次浏览的标签页（无视“启动时打开新标签页”设置），
+; 通过 --restore-last-session 实现；仅在正常关闭或退出标记已修正时生效。0 关闭，1 开启
+restore_session_after_update=1
 
 ; 域名映射（仅作用于 Chrome 自身，不影响系统 hosts 文件或其它程序）
 ; 通过 Chromium --host-resolver-rules 在启动参数注入，需重启 Chrome 生效

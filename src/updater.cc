@@ -162,6 +162,29 @@ bool LaunchUpdateWindow() {
     // "auto" against the OS using the identical key Chrome reads for
     // prefers-color-scheme, keeping the window in sync with the config page.
     m += L"THEME=" + Utf8ToWstr(config.GetTheme()) + L"\r\n";
+    // Graceful close / session-restore behavior for the update window, plus
+    // Chrome's user-data dir (used to repair profile.exit_type after a
+    // force-kill). Prefer the ini value; the default install location is only
+    // a best-effort fallback when it exists.
+    std::wstring data_dir;
+    if (config.GetUserDataDir() && !config.GetUserDataDir()->empty()) {
+      data_dir = *config.GetUserDataDir();
+    } else {
+      WCHAR local[MAX_PATH] = {0};
+      DWORD n = ::GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
+      if (n > 0 && n < MAX_PATH) {
+        std::wstring def = std::wstring(local) + L"\\Google\\Chrome\\User Data";
+        if (PathFileExistsW(def.c_str())) data_dir = def;
+      }
+    }
+    m += L"DATA_DIR=" + data_dir + L"\r\n";
+    m += L"GRACEFUL_CLOSE=" +
+         std::wstring(config.IsGracefulClose() ? L"1" : L"0") + L"\r\n";
+    m += L"GRACEFUL_TIMEOUT=" +
+         std::to_wstring(config.GetGracefulCloseTimeout()) + L"\r\n";
+    m += L"RESTORE_SESSION=" +
+         std::wstring(config.IsRestoreSessionAfterUpdate() ? L"1" : L"0") +
+         L"\r\n";
 
     HANDLE hF = CreateFileW(manifest_path.c_str(), GENERIC_WRITE, 0, nullptr,
                             CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);

@@ -846,8 +846,13 @@ std::string HandleRequest(const HttpRequest& req) {
     std::thread([has_update_action]() {
       Sleep(500);
       if (has_update_action) {
-        // The update window handles restart after update 鈥?just exit
-        ExitProcess(0);
+        // The update window closes Chrome gracefully (WM_CLOSE) and waits
+        // for a natural exit - let this process end with the last window so
+        // Chrome writes exit_type=Normal (no restore bubble next launch).
+        // Hard exit remains the fallback when graceful close is disabled.
+        if (!config.IsGracefulClose()) {
+          ExitProcess(0);
+        }
       } else {
         // Normal restart: launch new Chrome, then exit this one
         wchar_t exe_path[MAX_PATH];
@@ -982,10 +987,15 @@ std::string HandleRequest(const HttpRequest& req) {
     }
     SaveUpdateState();
 
-    // Exit Chrome immediately 鈥?the update window will restart it after the DLL swap
+    // The update window closes Chrome gracefully (WM_CLOSE) and restarts it
+    // after the DLL swap; let this process end with the last window so Chrome
+    // writes exit_type=Normal. Hard exit is the fallback when graceful close
+    // is disabled.
     std::thread([]() {
       Sleep(300);
-      ExitProcess(0);
+      if (!config.IsGracefulClose()) {
+        ExitProcess(0);
+      }
     }).detach();
 
     return BuildResponse(200, "application/json", "{\"ok\":true}");

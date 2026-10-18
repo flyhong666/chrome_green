@@ -7,7 +7,9 @@
 //
 // It performs the update/restart sequence:
 //   1. wait for the parent Chrome PID to exit
-//   2. wait for any Chrome process under our install dir to exit
+//   2. gracefully close browser windows (WM_CLOSE, the user-exit path) and
+//      wait for a natural exit; repair profile.exit_type if a force-kill was
+//      still needed (so the next launch shows no crash bubble)
 //   3. force-kill leftover processes (path-based, never by image name)
 //   4. delete the persisted update-state file FIRST (so a manual Chrome
 //      launch afterwards is a clean kIdle start)
@@ -61,6 +63,10 @@ static WCHAR g_keep_version[64];
 static int g_self_update_ready = 0;
 static WCHAR g_self_dll_new[520];
 static WCHAR g_state_file[520];
+static WCHAR g_data_dir[520];
+static int g_graceful_close = 1;
+static int g_graceful_timeout = 30;
+static int g_restore_session = 1;
 
 // ---- theme (kept in sync with the config page) ----
 // g_theme holds the raw value from the manifest: "auto" / "light" / "dark".
@@ -761,6 +767,11 @@ static void launch_chrome(int verify) {
         wcat(cmd, url);
       }
     }
+    // Restore the last session after an update restart (matches Chrome's own
+    // relaunch command line) and suppress the crash bubble as a safety net.
+    if (g_restore_session) {
+      wcat(cmd, L" --restore-last-session --disable-session-crashed-bubble");
+    }
     if (CreateProcessW(NULL, cmd, NULL, NULL, FALSE, 0, NULL, g_app_dir, &si, &pi)) {
       CloseHandle(pi.hProcess); CloseHandle(pi.hThread);
     }
@@ -850,6 +861,129 @@ static void ensure_chrome_visible(void) {
   }
 }
 
+// ---- graceful close + exit_type repair ----
+// WM_CLOSE is the exact path Chrome uses for a user exit (CloseAllBrowsers),
+// so Chrome runs beforeunload, saves the session and writes
+// exit_type=Normal before the process ends on its own.
+static BOOL CALLBACK CloseWindowsProc(HWND hwnd, LPARAM lp) {
+  (void)lp;
+  if (GetParent(hwnd)) return TRUE;
+  if (!IsWindowVisible(hwnd)) return TRUE;
+  WCHAR cls[64];
+  if (!GetClassNameW(hwnd, cls, 64)) return TRUE;
+  if (wcmpI(cls, L"Chrome_WidgetWin_1") != 0) return TRUE;
+  DWORD pid = 0;
+  GetWindowThreadProcessId(hwnd, &pid);
+  if (!pid) return TRUE;
+  WCHAR exe[MAX_PATH] = {0};
+  HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+  if (h) {
+    DWORD n = MAX_PATH;
+    QueryFullProcessImageNameW(h, 0, exe, &n);
+    CloseHandle(h);
+  }
+  WCHAR want[MAX_PATH];
+  pjoin(want, MAX_PATH, g_app_dir, L"chrome.exe");
+  if (wcmpI(exe, want) != 0) return TRUE;
+  PostMessageW(hwnd, WM_CLOSE, 0, 0);
+  return TRUE;
+}
+
+static void close_chrome_windows(void) {
+  EnumWindows(CloseWindowsProc, 0);
+}
+
+static int proc_alive(DWORD pid) {
+  if (!pid) return 0;
+  HANDLE h = OpenProcess(SYNCHRONIZE, FALSE, pid);
+  if (!h) return 0;
+  DWORD r = WaitForSingleObject(h, 0);
+  CloseHandle(h);
+  return r == WAIT_TIMEOUT;
+}
+
+// Wait up to secs seconds for pid. Returns 1 if it exited.
+static int wait_pid_exit_t(DWORD pid, int secs) {
+  DWORD t0 = GetTickCount();
+  for (;;) {
+    if (g_abort) return 0;
+    if (!proc_alive(pid)) return 1;
+    if (GetTickCount() - t0 >= (DWORD)secs * 1000) return 0;
+    Sleep(500);
+  }
+}
+
+static void wait_our_exit_t(int secs) {
+  DWORD t0 = GetTickCount();
+  for (;;) {
+    if (g_abort) return;
+    if (our_running() == 0) return;
+    if (GetTickCount() - t0 >= (DWORD)secs * 1000) return;
+    Sleep(500);
+  }
+}
+
+// A force-killed Chrome leaves the profile pref "exit_type" at "Crased"
+// (written at startup) → next launch shows the restore bubble and session
+// restore stays suppressed. Both values are 6 bytes, so rewrite in place.
+static const char kExitTypeKey[] = "\"exit_type\":\"";
+static const char kExitCrased[] = "Crased";
+static const char kExitNormal[] = "Normal";
+
+static void patch_prefs_file(const WCHAR* path) {
+  HANDLE h = CreateFileW(path, GENERIC_READ | GENERIC_WRITE, 0, NULL,
+                         OPEN_EXISTING, 0, NULL);
+  if (h == INVALID_HANDLE_VALUE) return;
+  HANDLE m = CreateFileMappingW(h, NULL, PAGE_READWRITE, 0, 0, NULL);
+  if (!m) { CloseHandle(h); return; }
+  BYTE* base = (BYTE*)MapViewOfFile(m, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+  if (base) {
+    LARGE_INTEGER sz;
+    if (GetFileSizeEx(h, &sz) && sz.QuadPart > 32) {
+      SIZE_T n = (SIZE_T)sz.QuadPart;
+      SIZE_T klen = sizeof(kExitTypeKey) - 1;
+      for (SIZE_T i = 0; i + klen + 6 <= n; i++) {
+        if (base[i] != (BYTE)'"') continue;
+        int match = 1;
+        for (SIZE_T k = 0; k < klen; k++) {
+          if (base[i + k] != (BYTE)kExitTypeKey[k]) { match = 0; break; }
+        }
+        if (!match) continue;
+        int crashed = 1;
+        for (int k = 0; k < 6; k++) {
+          if (base[i + klen + k] != (BYTE)kExitCrased[k]) { crashed = 0; break; }
+        }
+        if (!crashed) continue;
+        for (int k = 0; k < 6; k++) base[i + klen + k] = (BYTE)kExitNormal[k];
+        break;
+      }
+    }
+    FlushViewOfFile(base, 0);
+    UnmapViewOfFile(base);
+  }
+  CloseHandle(m);
+  CloseHandle(h);
+}
+
+// Patch every profile dir (Default / Profile N / ...) under the user-data dir.
+static void patch_exit_type(void) {
+  if (!g_data_dir[0]) return;
+  WCHAR search[600];
+  pjoin(search, 600, g_data_dir, L"*");
+  WIN32_FIND_DATAW fd;
+  HANDLE h = FindFirstFileW(search, &fd);
+  if (h == INVALID_HANDLE_VALUE) return;
+  do {
+    if (is_dot(fd.cFileName)) continue;
+    if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+    WCHAR prefs[700];
+    pjoin(prefs, 700, g_data_dir, fd.cFileName);
+    wcat(prefs, L"\\Preferences");
+    if (file_exists(prefs)) patch_prefs_file(prefs);
+  } while (FindNextFileW(h, &fd));
+  FindClose(h);
+}
+
 // ---- status reporting ----
 static void set_status(int pct, const WCHAR* txt) {
   if (pct < 0) pct = 0; if (pct > 100) pct = 100;
@@ -864,19 +998,36 @@ static void set_status(int pct, const WCHAR* txt) {
 // ---- worker thread ----
 static DWORD WINAPI Worker(LPVOID lp) {
   (void)lp;
+  DWORD t0 = 0;
+  int left = 0;
+  int killed = 0;
   SetCurrentDirectoryW(g_temp); // release any CWD lock on the install tree
 
-  set_status(2, L"正在等待 Chrome 退出…");
-  wait_pid_exit(g_pid, 10);
+  if (g_graceful_close) {
+    set_status(2, L"正在关闭 Chrome…");
+    close_chrome_windows();
+    if (g_abort) goto finish;
+    t0 = GetTickCount();
+    set_status(4, L"正在等待 Chrome 退出…");
+    wait_pid_exit_t(g_pid, g_graceful_timeout);
+    if (g_abort) goto finish;
+    left = g_graceful_timeout - (int)((GetTickCount() - t0) / 1000);
+    if (left < 5) left = 5;
+    set_status(8, L"正在等待进程释放…");
+    wait_our_exit_t(left);
+  } else {
+    set_status(2, L"正在等待 Chrome 退出…");
+    wait_pid_exit(g_pid, 10);
+    if (g_abort) goto finish;
+    set_status(8, L"正在等待进程释放…");
+    wait_our_exit(15);
+  }
   if (g_abort) goto finish;
 
-  set_status(8, L"正在等待进程释放…");
-  wait_our_exit(15);
-  if (g_abort) goto finish;
-
-  set_status(14, L"正在关闭残留进程…");
-  kill_pid(g_pid);
-  kill_our();
+  set_status(14, L"正在结束残留进程…");
+  if (proc_alive(g_pid)) { kill_pid(g_pid); killed = 1; }
+  if (our_running()) { kill_our(); killed = 1; }
+  if (killed) patch_exit_type();
   if (g_abort) goto finish;
 
   set_status(18, L"正在清理更新状态…");
@@ -1453,6 +1604,10 @@ static void assign_val(const WCHAR* key, const WCHAR* val) {
   else if (wcmpI(key, L"SELF_DLL_NEW") == 0) wcpy(g_self_dll_new, val);
   else if (wcmpI(key, L"STATE_FILE") == 0) wcpy(g_state_file, val);
   else if (wcmpI(key, L"THEME") == 0) wcpy(g_theme, val);
+  else if (wcmpI(key, L"DATA_DIR") == 0) wcpy(g_data_dir, val);
+  else if (wcmpI(key, L"GRACEFUL_CLOSE") == 0) g_graceful_close = (wtoul(val) != 0);
+  else if (wcmpI(key, L"GRACEFUL_TIMEOUT") == 0) g_graceful_timeout = (int)wtoul(val);
+  else if (wcmpI(key, L"RESTORE_SESSION") == 0) g_restore_session = (wtoul(val) != 0);
 }
 static void parse_manifest() {
   HANDLE h = CreateFileW(g_manifest, GENERIC_READ, FILE_SHARE_READ, NULL,
@@ -1568,6 +1723,8 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE hPrev, LPWSTR cmd, int nShow) {
   wcat(g_manifest, L"chrome_green_updater_manifest.txt");
   if (!file_exists(g_manifest)) g_test_mode = 1; // manual launch => preview
   parse_manifest();
+  if (g_graceful_timeout < 5) g_graceful_timeout = 5;
+  if (g_graceful_timeout > 120) g_graceful_timeout = 120;
   GetTempPathW(520, g_temp);
 
   if (g_test_mode) {
