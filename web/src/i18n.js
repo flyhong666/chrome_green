@@ -54,7 +54,7 @@ const translations = {
       "Choose the CDN to download the Chrome installer from",
     self_update_channel: "ChromeGreen Update Channel",
     self_update_channel_desc:
-      "Where ChromeGreen checks for its own version.dll updates. GH_PROXY does not apply to Gitee.",
+      "Where ChromeGreen checks for its own version.dll updates. GH_PROXY does not apply to Gitee/CNB.",
     channel_stable: "Stable",
     channel_beta: "Beta",
     channel_dev: "Dev",
@@ -368,7 +368,7 @@ const translations = {
     download_source_desc: "选择 Chrome 安装包的下载 CDN",
     self_update_channel: "ChromeGreen 更新通道",
     self_update_channel_desc:
-      "选择从哪里检查 ChromeGreen 自身（version.dll）更新。Gitee 通道下 GH_PROXY 代理不生效。",
+      "选择从哪里检查 ChromeGreen 自身（version.dll）更新。Gitee / CNB 通道下 GH_PROXY 代理不生效。",
     channel_stable: "稳定版",
     channel_beta: "测试版",
     channel_dev: "开发版",

@@ -27,6 +27,7 @@ enum class UpdateArch {
 enum class SelfUpdateChannel {
   kGitHub = 0,  // GitHub Releases via the ghapi-json-generator static index
   kGitee = 1,   // gitee.com/iicm/chrome_green_release/version.json
+  kCNB = 2,     // cnb.cool/libs_repo/chrome_green_release/-/git/raw/main/version.json
 };
 
 // Information about an available Chrome update
@@ -131,8 +132,8 @@ std::string GetApParameter(UpdateChannel channel, UpdateArch arch);
 // Self-update: check for a new chrome_green version.
 // Returns UpdateInfo with has_update=true if a newer version is available.
 // proxy/proxy_type: empty means no proxy (does NOT use system proxy).
-// self_channel: GitHub Releases or the Gitee mirror. GH_PROXY only applies to
-// the GitHub channel.
+// self_channel: GitHub Releases, the Gitee mirror, or the CNB mirror.
+// GH_PROXY only applies to the GitHub channel.
 UpdateInfo CheckSelfUpdate(const std::string& proxy = "",
                           const std::string& proxy_type = "",
                           SelfUpdateChannel self_channel =

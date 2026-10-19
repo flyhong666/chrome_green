@@ -221,6 +221,7 @@ const proxyTypeOptions = computed(() => [
 const selfUpdateChannelOptions = computed(() => [
   { value: 0, label: "GitHub" },
   { value: 1, label: "Gitee" },
+  { value: 2, label: "CNB" },
 ]);
 let logPollTimer = null;
 const logPollingInterval = 5000;

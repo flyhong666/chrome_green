@@ -149,7 +149,8 @@ void Config::LoadConfig() {
   self_update_channel_ =
       ::GetPrivateProfileIntW(L"update", L"self_update_channel", 1,
                               GetIniPath().c_str());
-  if (self_update_channel_ != 0) self_update_channel_ = 1;
+  if (self_update_channel_ != 0 && self_update_channel_ != 2)
+    self_update_channel_ = 1;
   graceful_close_ = ::GetPrivateProfileIntW(L"update", L"graceful_close", 1,
                                             GetIniPath().c_str()) != 0;
   graceful_close_timeout_ =
@@ -335,8 +336,8 @@ proxy_type=HTTP
 proxy_chrome_download=0
 ; 下载源：0=edgedl 1=dl.google.com(默认) 2=www.google.com 3=redirector.gvt1.com
 download_source=1
-; ChromeGreen 自身（version.dll）更新源：0 = GitHub，1 = Gitee（默认）
-; Gitee 通道下 GH_PROXY 代理不生效（该镜像仅代理 GitHub）
+; ChromeGreen 自身（version.dll）更新源：0 = GitHub，1 = Gitee（默认），2 = CNB
+; Gitee / CNB 通道下 GH_PROXY 代理不生效（这些镜像仅代理 GitHub）
 self_update_channel=1
 ; 更新时先正常关闭 Chrome（向所有浏览器窗口发送关闭请求，等待其自然退出），
 ; 超时或失败后再强制结束；可避免下次启动弹出“未正常关闭/恢复”提示。0 关闭，1 开启

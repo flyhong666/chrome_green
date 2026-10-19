@@ -267,7 +267,7 @@ class Config {
   std::string update_proxy_type_ = "HTTP";
   bool proxy_chrome_download_ = false;
   int download_source_ = 1;  // 0=edgedl, 1=dl.google.com (default), 2=www.google.com
-  int self_update_channel_ = 1;  // 0=GitHub, 1=Gitee (default)
+  int self_update_channel_ = 1;  // 0=GitHub, 1=Gitee (default), 2=CNB
   bool graceful_close_ = true;
   int graceful_close_timeout_ = 30;  // seconds, total budget
   bool restore_session_after_update_ = true;

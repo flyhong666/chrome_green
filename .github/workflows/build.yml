@@ -204,23 +204,28 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Stage Gitee payload
+      - name: Stage mirror payloads
         # Fixed file names (no version suffix) so each release overwrites the
-        # previous one in the mirror repo.
+        # previous one in the mirror repos. CNB raw path uses /-/git/raw/<branch>/.
         run: |
           set -euo pipefail
-          mkdir -p gitee_payload
-          cp "ChromeGreen_v${{ env.VERSION }}.zip" gitee_payload/ChromeGreen.zip
-          SIZE=$(stat -c%s gitee_payload/ChromeGreen.zip)
-          cat > gitee_payload/version.json <<EOF
+          SIZE=$(stat -c%s "ChromeGreen_v${{ env.VERSION }}.zip")
+          GEN() {
+            local dir="$1" url="$2"
+            mkdir -p "$dir"
+            cp "ChromeGreen_v${{ env.VERSION }}.zip" "$dir/ChromeGreen.zip"
+            cat > "$dir/version.json" <<EOF
           {
             "version": "${{ env.VERSION }}",
-            "url": "https://gitee.com/iicm/chrome_green_release/raw/master/ChromeGreen.zip",
+            "url": "$url",
             "size": ${SIZE},
             "published_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           }
           EOF
-          cat gitee_payload/version.json
+            cat "$dir/version.json"
+          }
+          GEN gitee_payload "https://gitee.com/iicm/chrome_green_release/raw/master/ChromeGreen.zip"
+          GEN cnb_payload "https://cnb.cool/libs_repo/chrome_green_release/-/git/raw/main/ChromeGreen.zip"
 
       - name: Push ChromeGreen.zip + version.json to Gitee
         # Skipped for pre-releases: version.json is a single slot, so an alpha
@@ -277,6 +282,53 @@ jobs:
           git add -A
           git commit -m "release: ChromeGreen ${{ env.VERSION }}" || echo "nothing to commit"
           git push origin HEAD:master
+
+      - name: Push ChromeGreen.zip + version.json to CNB
+        # Skipped for pre-releases: version.json is a single slot, so an alpha
+        # would immediately show up as an update for everyone on the CNB channel.
+        if: ${{ env.IS_PRERELEASE == 'false' }}
+        env:
+          CNB_ACCESS_TOKEN: ${{ secrets.CNB_ACCESS_TOKEN }}
+          CNB_USER_NAME: ${{ secrets.CNB_USER_NAME }}
+          CNB_USER_EMAIL: ${{ secrets.CNB_USER_EMAIL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CNB_ACCESS_TOKEN}" ]; then
+            echo "::warning::CNB_ACCESS_TOKEN is empty, skipping cnb mirror"
+            exit 0
+          fi
+          # Auth user is fixed to "cnb" for cnb.cool (the path segment in
+          # cnb.cool/<namespace>/<repo>); the token must belong to that account.
+          # Commit identity is display-only, so the nickname/e-mail are fine.
+          CNB_LOGIN="cnb"
+          CNB_NAME="${CNB_USER_NAME:-cnb}"
+          CNB_MAIL="${CNB_USER_EMAIL:-cnb@users.noreply.github.com}"
+          REMOTE="https://${CNB_LOGIN}:${CNB_ACCESS_TOKEN}@cnb.cool/libs_repo/chrome_green_release.git"
+          WORK="$RUNNER_TEMP/cnb_push"
+          rm -rf "$WORK"
+          mkdir -p "$WORK"
+          cd "$WORK"
+          git config --global user.name "$CNB_NAME"
+          git config --global user.email "$CNB_MAIL"
+          if ! git ls-remote "$REMOTE" >/dev/null 2>&1; then
+            echo "::error::Cannot reach the cnb repo with CNB_ACCESS_TOKEN (login 'cnb')."
+            exit 1
+          fi
+          # An empty mirror repo cannot be cloned; fall back to a fresh init.
+          if ! git clone --depth 1 "$REMOTE" repo 2>/dev/null; then
+            mkdir repo && cd repo
+            git init -q
+            git remote add origin "$REMOTE"
+            git checkout -q -b main
+          fi
+          cd "$WORK/repo"
+          cp "$GITHUB_WORKSPACE/cnb_payload/ChromeGreen.zip" ./ChromeGreen.zip
+          cp "$GITHUB_WORKSPACE/cnb_payload/version.json" ./version.json
+          rm -f ChromeGreen_v*.zip
+          git add -A
+          git commit -m "release: ChromeGreen ${{ env.VERSION }}" || echo "nothing to commit"
+          git push origin HEAD:main
+
   trigger-another-repo:
     needs: build
     runs-on: ubuntu-latest

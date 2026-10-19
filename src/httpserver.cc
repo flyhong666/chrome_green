@@ -450,7 +450,8 @@ std::string HandleRequest(const HttpRequest& req) {
     bool proxy_chrome_download = JsonGetBool(req.body, "proxy_chrome_download");
     int download_source = JsonGetInt(req.body, "download_source");
     int self_update_channel = JsonGetInt(req.body, "self_update_channel");
-    if (self_update_channel != 0) self_update_channel = 1;
+    if (self_update_channel != 0 && self_update_channel != 2)
+      self_update_channel = 1;
     bool keep_installer = JsonGetBool(req.body, "keep_installer");
     bool keep_old_versions = JsonGetBool(req.body, "keep_old_versions");
     std::string theme = JsonGetString(req.body, "theme");
@@ -869,9 +870,11 @@ std::string HandleRequest(const HttpRequest& req) {
   // API: check for chrome_green self-update (Release channel only)
   if (req.method == "GET" && req.path.find("/api/self-update/check") == 0) {
     auto state = GetUpdateStateSnapshot();
-    SelfUpdateChannel self_channel = config.GetSelfUpdateChannel() == 1
-                                          ? SelfUpdateChannel::kGitee
-                                          : SelfUpdateChannel::kGitHub;
+    int self_ch = config.GetSelfUpdateChannel();
+    SelfUpdateChannel self_channel =
+        self_ch == 1 ? SelfUpdateChannel::kGitee
+                     : (self_ch == 2 ? SelfUpdateChannel::kCNB
+                                     : SelfUpdateChannel::kGitHub);
     UpdateInfo info =
         CheckSelfUpdate(state.proxy, state.proxy_type, self_channel);
     {
@@ -925,9 +928,11 @@ std::string HandleRequest(const HttpRequest& req) {
     }
 
     // Download + extract in a background thread
-    SelfUpdateChannel self_channel = config.GetSelfUpdateChannel() == 1
-                                          ? SelfUpdateChannel::kGitee
-                                          : SelfUpdateChannel::kGitHub;
+    int self_ch = config.GetSelfUpdateChannel();
+    SelfUpdateChannel self_channel =
+        self_ch == 1 ? SelfUpdateChannel::kGitee
+                     : (self_ch == 2 ? SelfUpdateChannel::kCNB
+                                     : SelfUpdateChannel::kGitHub);
     std::thread([url = state.self_download_url, save_path, extract_dir,
                  proxy = state.proxy, proxy_type = state.proxy_type,
                  self_channel]() {

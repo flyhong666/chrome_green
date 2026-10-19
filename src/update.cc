@@ -842,12 +842,13 @@ UpdateInfo CheckForUpdates(UpdateChannel channel, UpdateArch arch,
 static std::string BuildGhProxyUrl(const std::string& proxy,
                                    const std::string& url);
 
-// GH_PROXY mirrors only GitHub, so it is meaningless for the Gitee channel.
+// GH_PROXY mirrors only GitHub, so it is meaningless for the Gitee/CNB channel.
 // There we fall back to a direct connection. HTTP/SOCKS5 are generic proxies
 // and keep working.
 static bool GhProxyApplies(SelfUpdateChannel self_channel,
                            const std::string& proxy_type) {
-  return !(self_channel == SelfUpdateChannel::kGitee &&
+  return !((self_channel == SelfUpdateChannel::kGitee ||
+            self_channel == SelfUpdateChannel::kCNB) &&
            proxy_type == "GH_PROXY");
 }
 
@@ -955,6 +956,13 @@ static const char* kGiteeIndexBase =
     "https://gitee.com/iicm/chrome_green_release/raw/master/version.json";
 static const char* kGiteeZipFallback =
     "https://gitee.com/iicm/chrome_green_release/raw/master/ChromeGreen.zip";
+
+// CNB mirror (cnb.cool) of the same release payload. Same small version.json
+// object as the Gitee mirror. CNB exposes raw content via /-/git/raw/<branch>/.
+static const char* kCNBIndexBase =
+    "https://cnb.cool/libs_repo/chrome_green_release/-/git/raw/main/version.json";
+static const char* kCNBZipFallback =
+    "https://cnb.cool/libs_repo/chrome_green_release/-/git/raw/main/ChromeGreen.zip";
 
 // Minimal string-search JSON helpers (no external parser dependency).
 
@@ -1284,6 +1292,62 @@ static UpdateInfo FetchGiteeIndex(const std::string& proxy,
   return info;
 }
 
+// Parse the CNB version.json. Identical contract to ParseGiteeVersion.
+static bool ParseCNBVersion(const std::string& body, UpdateInfo& info) {
+  if (body.empty()) return false;
+
+  std::string ver = JsonStringField(body, "version");
+  if (ver.empty()) {
+    AddDebugLog("CNB parse: version.json has no \"version\" field");
+    return false;
+  }
+  if (ver[0] == 'v') ver = ver.substr(1);
+
+  std::string url = JsonStringField(body, "url");
+  if (url.empty()) url = kCNBZipFallback;
+
+  long long size = 0;
+  JsonIntField(body, "size", size);
+
+  info.version = ver;
+  info.urls.assign(1, url);
+  info.size = size;
+  info.has_update = CompareSemver(ver, RELEASE_VER_STR) > 0;
+
+  if (info.has_update) {
+    AddDebugLog("Self-update: CNB remote " + ver + " > local " +
+                std::string(RELEASE_VER_STR) + " -> update available");
+  } else {
+    AddDebugLog("Self-update: CNB local " + std::string(RELEASE_VER_STR) +
+                " is current (remote " + ver + ") -> no update");
+    info.urls.clear();
+    info.size = 0;
+  }
+  return true;
+}
+
+// Fetch version.json from the CNB mirror. Cache-busting query appended for the
+// same CDN-staleness reason as the Gitee fetch.
+static UpdateInfo FetchCNBIndex(const std::string& proxy,
+                                const std::string& proxy_type) {
+  UpdateInfo info;
+  char stamp[32];
+  snprintf(stamp, sizeof(stamp), "?_=%lld",
+           static_cast<long long>(time(nullptr)));
+  std::string url = std::string(kCNBIndexBase) + stamp;
+
+  std::string body;
+  if (!HttpGetText(url, proxy, proxy_type, SelfUpdateChannel::kCNB,
+                   &body)) {
+    AddDebugLog("Self-update check failed: could not fetch CNB version.json");
+    return info;
+  }
+  if (!ParseCNBVersion(body, info)) {
+    AddDebugLog("Self-update check failed: could not parse CNB version.json");
+  }
+  return info;
+}
+
 // --- Self-update: detect a newer version.dll via published GitHub Releases ---
 //
 // The check is based ONLY on published Releases (never on the main branch's
@@ -1310,6 +1374,17 @@ UpdateInfo CheckSelfUpdate(const std::string& proxy,
       return gitee_info;  // has_update stays false
     }
     return gitee_info;
+  }
+
+  if (self_channel == SelfUpdateChannel::kCNB) {
+    AddDebugLog("Self-update check started (cnb)" +
+                (proxy.empty() ? "" : ", proxy: " + proxy));
+    UpdateInfo cnb_info = FetchCNBIndex(proxy, proxy_type);
+    if (cnb_info.version.empty()) {
+      AddDebugLog("Self-update check failed: no CNB version.json version");
+      return cnb_info;  // has_update stays false
+    }
+    return cnb_info;
   }
 
   AddDebugLog("Self-update check started (release index)" +
@@ -1448,7 +1523,7 @@ bool DownloadSelfUpdate(const std::string& url,
     // GH_PROXY holds a mirror base URL, not a proxy address — clearing it
     // avoids feeding that URL to WinHTTP as a named proxy below.
     effective_proxy.clear();
-    AddDebugLog("GH_PROXY skipped for the gitee self-update channel");
+    AddDebugLog("GH_PROXY skipped for the non-GitHub self-update channel");
   }
 
   HINTERNET hSession = WinHttpOpen(
