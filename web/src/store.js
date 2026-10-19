@@ -154,7 +154,7 @@ const activeTab = ref("status");
 const allTabs = [
   { id: "status", label: "nav_status", icon: "status" },
   { id: "settings", label: "nav_settings", icon: "settings" },
-  { id: "proxy", label: "nav_proxy", icon: "network" },
+  { id: "hotkeys", label: "nav_hotkeys", icon: "keyboard" },
   { id: "resolver", label: "nav_resolver", icon: "dns" },
   { id: "tabs", label: "nav_tabs", icon: "tabs" },
   { id: "logs", label: "nav_logs", icon: "logs" },

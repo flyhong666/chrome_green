@@ -252,6 +252,23 @@ export const iconRegistry = {
       },
     ],
   },
+  keyboard: {
+    viewBox: "0 0 24 24",
+    nodes: [
+      {
+        tag: "rect",
+        attrs: { x: 2, y: 6, width: 20, height: 13, rx: 2, "stroke-width": 1.8 },
+      },
+      {
+        tag: "path",
+        attrs: {
+          d: "M5 10h2M9 10h2M13 10h2M17 10h2M5 14h3M10 14h4M16 14h3",
+          "stroke-width": 1.8,
+          "stroke-linecap": "round",
+        },
+      },
+    ],
+  },
   logs: {
     viewBox: "0 0 24 24",
     nodes: [

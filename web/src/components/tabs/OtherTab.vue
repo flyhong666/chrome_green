@@ -1,8 +1,10 @@
 <template>
   <div class="card relative">
-    <span class="restart-chip absolute top-4 right-4 z-10">{{ t("restart_required") }}</span>
+    <span class="restart-chip absolute top-4 right-4 z-10">{{
+      t("restart_required")
+    }}</span>
     <div class="card-content pb-16 pt-12">
-<!-- Top horizontal group tabs -->
+      <!-- Top horizontal group tabs -->
       <nav
         class="flex gap-1 overflow-x-auto border-b border-[hsl(var(--border))] -mx-1 px-1 mb-6">
         <button
@@ -15,7 +17,7 @@
         </button>
       </nav>
 
-<!-- Content (active group only) -->
+      <!-- Content (active group only) -->
       <div class="min-w-0">
         <!-- Paths & Data -->
         <section v-show="activeGroup === 'paths'" class="space-y-5">
@@ -101,80 +103,59 @@
           </div>
         </section>
 
-        <!-- Hotkeys -->
-        <section v-show="activeGroup === 'hotkeys'" class="space-y-5">
+        <!-- Update Proxy -->
+        <section v-show="activeGroup === 'proxy'" class="space-y-5">
           <div class="setting-row">
             <div class="setting-label-group">
-              <label class="setting-label">{{ t("translate_key") }}</label>
-              <p class="setting-desc">{{ t("translate_key_desc") }}</p>
+              <label class="setting-label">{{ t("proxy_type") }}</label>
+              <p class="setting-desc">{{ t("proxy_type_desc") }}</p>
             </div>
-            <div class="w-64 max-w-full">
-              <KeyInput
-                v-model="settings.translate_key"
-                :placeholder="t('translate_key_desc')"
-                @change="saveSettings" />
+            <div class="w-32">
+              <CustomSelect
+                v-model="settings.proxy_type"
+                :options="proxyTypeOptions"
+                @change="() => saveSettings()" />
             </div>
           </div>
           <div class="setting-row">
             <div class="setting-label-group">
-              <label class="setting-label">{{ t("boss_key") }}</label>
-              <p class="setting-desc">{{ t("boss_key_desc") }}</p>
+              <label class="setting-label">{{ t("proxy_address") }}</label>
+              <p class="setting-desc">{{ t("proxy_address_desc") }}</p>
             </div>
-            <div class="w-64 max-w-full">
-              <KeyInput
-                v-model="settings.boss_key"
-                :placeholder="t('boss_key_desc')"
-                @change="saveSettings" />
-            </div>
-          </div>
-          <div class="setting-row">
-            <div class="setting-label-group">
-              <label class="setting-label">{{ t("action_open_new_window") }}</label>
-              <p class="setting-desc">{{ t("action_open_new_window_desc") }}</p>
-            </div>
-            <div class="w-64 max-w-full">
-              <KeyInput
-                v-model="settings.open_new_window"
-                :placeholder="t('action_open_new_window_ph')"
-                @change="saveSettings" />
-            </div>
-          </div>
-          <div class="setting-row !items-start">
-            <div class="setting-label-group">
-              <label class="setting-label">{{ t("action_open_url_group") }}</label>
-              <p class="setting-desc">{{ t("action_open_url_group_desc") }}</p>
-            </div>
-            <div class="w-80 max-w-full space-y-2">
-              <KeyInput
-                v-model="settings.open_url_group"
-                :placeholder="t('action_open_url_group_ph')"
-                @change="saveSettings" />
-              <textarea
-                v-model="settings.url_group"
-                spellcheck="false"
+            <div class="w-64">
+              <input
+                v-model="settings.proxy"
                 @blur="saveSettings"
-                class="input min-h-[88px] w-full resize-y font-mono text-xs leading-relaxed"
-                :placeholder="t('url_group_desc')"></textarea>
+                class="input"
+                :placeholder="t('proxy_placeholder')" />
             </div>
           </div>
           <div class="setting-row">
             <div class="setting-label-group">
-              <label class="setting-label">{{ t("action_open_clipboard") }}</label>
-              <p class="setting-desc">{{ t("action_open_clipboard_desc") }}</p>
+              <label class="setting-label">{{
+                t("proxy_chrome_download")
+              }}</label>
+              <p class="setting-desc">{{ t("proxy_chrome_download_desc") }}</p>
             </div>
-            <div class="w-80 max-w-full space-y-2">
-              <KeyInput
-                v-model="settings.open_clipboard"
-                :placeholder="t('action_open_clipboard_ph')"
-                @change="saveSettings" />
-              <div class="flex gap-2">
-                <div class="w-48 shrink-0">
-                  <CustomSelect
-                    v-model="settings.clipboard_mode"
-                    :options="clipboardModeOptions"
-                    @change="() => saveSettings()" />
-                </div>
-              </div>
+            <div
+              :class="[
+                'switch-track',
+                settings.proxy_chrome_download ? 'on' : 'off',
+              ]"
+              :style="
+                ghProxy
+                  ? {
+                      opacity: 0.45,
+                      pointerEvents: 'none',
+                      cursor: 'not-allowed',
+                    }
+                  : {}
+              "
+              :aria-disabled="ghProxy"
+              @click="ghProxy ? null : toggle('proxy_chrome_download')"
+              role="switch"
+              :aria-checked="settings.proxy_chrome_download">
+              <span class="switch-thumb"></span>
             </div>
           </div>
         </section>
@@ -213,10 +194,7 @@
               <p class="setting-desc">{{ t("ignore_policies_desc") }}</p>
             </div>
             <div
-              :class="[
-                'switch-track',
-                settings.ignore_policies ? 'on' : 'off',
-              ]"
+              :class="['switch-track', settings.ignore_policies ? 'on' : 'off']"
               @click="toggle('ignore_policies')"
               role="switch"
               :aria-checked="settings.ignore_policies">
@@ -228,9 +206,9 @@
               <label class="setting-label">{{
                 t("suppress_false_upgrade_notification")
               }}</label>
-              <p class="setting-desc">{{
-                t("suppress_false_upgrade_notification_desc")
-              }}</p>
+              <p class="setting-desc">
+                {{ t("suppress_false_upgrade_notification_desc") }}
+              </p>
             </div>
             <div
               :class="[
@@ -239,9 +217,7 @@
               ]"
               @click="toggle('suppress_false_upgrade_notification')"
               role="switch"
-              :aria-checked="
-                settings.suppress_false_upgrade_notification
-              ">
+              :aria-checked="settings.suppress_false_upgrade_notification">
               <span class="switch-thumb"></span>
             </div>
           </div>
@@ -274,7 +250,9 @@
                     v-model="m.src"
                     class="flex-1"
                     :placeholder="t('keymapping_src')" />
-                  <span class="text-[hsl(var(--muted-foreground))] font-medium">=</span>
+                  <span class="text-[hsl(var(--muted-foreground))] font-medium"
+                    >=</span
+                  >
                   <KeyInput
                     v-model="m.dst"
                     class="flex-1"
@@ -311,7 +289,10 @@
               <p class="setting-desc">{{ t("fix_taskbar_menu_desc") }}</p>
             </div>
             <div
-              :class="['switch-track', settings.fix_taskbar_menu ? 'on' : 'off']"
+              :class="[
+                'switch-track',
+                settings.fix_taskbar_menu ? 'on' : 'off',
+              ]"
               @click="toggle('fix_taskbar_menu')"
               role="switch"
               :aria-checked="settings.fix_taskbar_menu">
@@ -333,11 +314,18 @@
           </div>
           <div class="setting-row">
             <div class="setting-label-group">
-              <label class="setting-label">{{ t("suppress_cmdline_warning") }}</label>
-              <p class="setting-desc">{{ t("suppress_cmdline_warning_desc") }}</p>
+              <label class="setting-label">{{
+                t("suppress_cmdline_warning")
+              }}</label>
+              <p class="setting-desc">
+                {{ t("suppress_cmdline_warning_desc") }}
+              </p>
             </div>
             <div
-              :class="['switch-track', settings.suppress_cmdline_warning ? 'on' : 'off']"
+              :class="[
+                'switch-track',
+                settings.suppress_cmdline_warning ? 'on' : 'off',
+              ]"
               @click="toggle('suppress_cmdline_warning')"
               role="switch"
               :aria-checked="settings.suppress_cmdline_warning">
@@ -346,11 +334,18 @@
           </div>
           <div class="setting-row">
             <div class="setting-label-group">
-              <label class="setting-label">{{ t("open_config_after_update") }}</label>
-              <p class="setting-desc">{{ t("open_config_after_update_desc") }}</p>
+              <label class="setting-label">{{
+                t("open_config_after_update")
+              }}</label>
+              <p class="setting-desc">
+                {{ t("open_config_after_update_desc") }}
+              </p>
             </div>
             <div
-              :class="['switch-track', settings.open_config_after_update ? 'on' : 'off']"
+              :class="[
+                'switch-track',
+                settings.open_config_after_update ? 'on' : 'off',
+              ]"
               @click="toggle('open_config_after_update')"
               role="switch"
               :aria-checked="settings.open_config_after_update">
@@ -371,9 +366,16 @@
                 <span
                   v-if="shortcutBusy"
                   class="inline-block w-3.5 h-3.5 border-2 border-current/30 border-t-current rounded-full animate-spin mr-1.5 align-middle -mt-0.5"></span>
-                {{ tools.desktop_shortcut ? t("tool_status_created") : t("tool_shortcut_btn") }}
+                {{
+                  tools.desktop_shortcut
+                    ? t("tool_status_created")
+                    : t("tool_shortcut_btn")
+                }}
               </button>
-              <span v-if="toolMessage" class="text-xs" :class="toolMessageClass">
+              <span
+                v-if="toolMessage"
+                class="text-xs"
+                :class="toolMessageClass">
                 {{ toolMessage }}
               </span>
             </div>
@@ -398,7 +400,7 @@
                     ? t("tool_clean_status_empty")
                     : t("tool_clean_status_exists").replace(
                         "{n}",
-                        chromeData.entry_count
+                        chromeData.entry_count,
                       )
                 }}
               </p>
@@ -429,7 +431,7 @@
       </div>
     </div>
 
-<!-- Save button pinned to the card's bottom-right -->
+    <!-- Save button pinned to the card's bottom-right -->
     <button
       class="btn btn-primary absolute bottom-4 right-4 z-10 shadow-lg gap-1.5"
       @click="saveSettings()">
@@ -440,12 +442,12 @@
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { computed, ref } from "vue";
+import { t } from "../../i18n.js";
+import { useStore } from "../../store.js";
+import CustomSelect from "../CustomSelect.vue";
 import Icon from "../Icon.vue";
 import KeyInput from "../KeyInput.vue";
-import CustomSelect from "../CustomSelect.vue";
-import { useStore } from "../../store.js";
-import { t } from "../../i18n.js";
 
 const {
   settings,
@@ -464,17 +466,22 @@ const {
   chromeDataMessage,
   chromeDataMessageOk,
   cleanChromeData,
+  proxyTypeOptions,
 } = useStore();
+
+// GH_PROXY only proxies GitHub; the proxy fields are inert in that mode.
+const ghProxy = computed(() => settings.proxy_type === "GH_PROXY");
 
 // Top horizontal group tabs (order = display order).
 // "调试日志" renamed to "其他" (grp_other) and moved to the end;
-// "高级" renamed to "按键映射" (grp_advanced / Key Mappings).
+// "高级" renamed to "按键映射" (grp_advanced / Key Mappings);
+// "快捷键" moved out to its own top-level tab; "更新代理" demoted here.
 const groups = [
   { id: "paths", label: "grp_paths" },
   { id: "startup", label: "grp_startup" },
-  { id: "hotkeys", label: "grp_hotkeys" },
   { id: "privacy", label: "grp_privacy" },
   { id: "advanced", label: "grp_advanced" },
+  { id: "proxy", label: "grp_proxy" },
   { id: "debug", label: "grp_other" },
 ];
 const activeGroup = ref("paths");

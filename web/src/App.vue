@@ -184,7 +184,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import Icon from "./components/Icon.vue";
 import LogsTab from "./components/tabs/LogsTab.vue";
 import OtherTab from "./components/tabs/OtherTab.vue";
-import ProxyTab from "./components/tabs/ProxyTab.vue";
+import HotkeysTab from "./components/tabs/HotkeysTab.vue";
 import ResolverTab from "./components/tabs/ResolverTab.vue";
 import SettingsTab from "./components/tabs/SettingsTab.vue";
 import StatusTab from "./components/tabs/StatusTab.vue";
@@ -215,7 +215,7 @@ const {
 const tabMap = {
   status: StatusTab,
   settings: SettingsTab,
-  proxy: ProxyTab,
+  hotkeys: HotkeysTab,
   resolver: ResolverTab,
   tabs: TabsTab,
   logs: LogsTab,
