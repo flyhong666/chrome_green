@@ -1,5 +1,8 @@
 <template>
-  <div class="card">
+  <div class="card relative">
+    <span
+      class="restart-chip absolute top-4 right-4 z-10"
+      :title="t('restart_note')">{{ t("restart_required") }}</span>
     <div class="card-header">
       <h2 class="card-title">{{ t("grp_hotkeys") }}</h2>
       <p class="card-description">{{ t("hotkeys_desc") }}</p>
@@ -14,7 +17,7 @@
           <KeyInput
             v-model="settings.translate_key"
             :placeholder="t('translate_key_desc')"
-            @change="saveSettings" />
+            @change="() => saveSettings()" />
         </div>
       </div>
       <div class="setting-row">
@@ -26,7 +29,7 @@
           <KeyInput
             v-model="settings.boss_key"
             :placeholder="t('boss_key_desc')"
-            @change="saveSettings" />
+            @change="() => saveSettings()" />
         </div>
       </div>
       <div class="setting-row">
@@ -38,7 +41,7 @@
           <KeyInput
             v-model="settings.open_new_window"
             :placeholder="t('action_open_new_window_ph')"
-            @change="saveSettings" />
+            @change="() => saveSettings()" />
         </div>
       </div>
       <div class="setting-row !items-start">
@@ -50,11 +53,11 @@
           <KeyInput
             v-model="settings.open_url_group"
             :placeholder="t('action_open_url_group_ph')"
-            @change="saveSettings" />
+            @change="() => saveSettings()" />
           <textarea
             v-model="settings.url_group"
             spellcheck="false"
-            @blur="saveSettings"
+            @blur="() => saveSettings()"
             class="input min-h-[88px] w-full resize-y font-mono text-xs leading-relaxed"
             :placeholder="t('url_group_desc')"></textarea>
         </div>
@@ -68,7 +71,7 @@
           <KeyInput
             v-model="settings.open_clipboard"
             :placeholder="t('action_open_clipboard_ph')"
-            @change="saveSettings" />
+            @change="() => saveSettings()" />
           <div class="flex gap-2">
             <div class="w-48 shrink-0">
               <CustomSelect

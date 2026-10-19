@@ -19,6 +19,14 @@ on:
         options:
           - release
           - debug
+      force_overwrite:
+        description: "Force overwrite if the same version's Release/Tag already exists (keeps existing release notes)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 permissions:
   contents: write # checkout, push version.h, create GitHub Release
@@ -193,6 +201,22 @@ jobs:
           subject-path: |
             ChromeGreen_v${{ env.VERSION }}.zip
 
+      - name: Resolve release body (preserve on overwrite)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BODY=""
+          if [ "${{ github.event.inputs.force_overwrite }}" = "true" ] && \
+             gh release view "${{ env.VERSION }}" >/dev/null 2>&1; then
+            BODY=$(gh release view "${{ env.VERSION }}" --json body -q .body)
+            echo "::notice::Release ${{ env.VERSION }} already exists — deleting to overwrite (existing release notes preserved)."
+            gh release delete "${{ env.VERSION }}" --yes
+            # Also drop the tag so the next step can recreate it cleanly.
+            git push --delete origin "${{ env.VERSION }}" || true
+          fi
+          printf '%s' "$BODY" > "$GITHUB_WORKSPACE/release_body.txt"
+
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
@@ -200,6 +224,7 @@ jobs:
             ChromeGreen_v${{ env.VERSION }}.zip
           tag_name: ${{ env.VERSION }}
           name: ${{ env.VERSION }}
+          body_path: ${{ github.workspace }}/release_body.txt
           prerelease: ${{ env.IS_PRERELEASE }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
