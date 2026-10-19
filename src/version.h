@@ -2,8 +2,8 @@
 #define CHROME_GREEN_SRC_VERSION_H_
 
 #define RELEASE_VER_MAIN 2
-#define RELEASE_VER_SUB 0
-#define RELEASE_VER_FIX 9
+#define RELEASE_VER_SUB 1
+#define RELEASE_VER_FIX 0
 #define RELEASE_VER_PRE_SUFFIX ""
 
 #define TOSTRING2(arg) #arg
