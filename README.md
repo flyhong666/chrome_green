@@ -38,7 +38,7 @@ ChromeGreen is a `version.dll` injection for Google Chrome whose main goal is **
 
 ## Download
 
-[Release](https://github.com/libsgh/chrome_green/releases)
+[GitHub Release](https://github.com/libsgh/chrome_green/releases) [CNB](https://cnb.cool/libs_repo/chrome_green_release/-/git/raw/main/ChromeGreen.zip) [Gitee](https://gitee.com/iicm/chrome_green_release/raw/master/ChromeGreen.zip)
 
 ## Installation
 

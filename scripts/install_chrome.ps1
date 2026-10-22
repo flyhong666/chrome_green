@@ -50,11 +50,15 @@ $ErrorActionPreference = 'Stop'
 $ScriptDate = '2026-08-20'
 
 # --- Configurable mirrors / endpoints (edit these to change sources) ---
-# GitHub proxy mirror prefix. BOTH the pre-baked release-index JSON
-# (libsgh/ghapi-json-generator raw) AND the plugin archive downloads are routed
-# through this prefix, so a single setting proxies every GitHub fetch.
+# GitHub proxy mirror prefix. Used for the pre-baked release-index JSON
+# (libsgh/ghapi-json-generator raw) and chrome_plus archive downloads.
+# chrome_green uses its own CNB manifest/archive and is not routed here.
 # Leave empty ('') to hit GitHub directly (no mirror).
 $GhMirror = 'http://gh.noki.eu.org'
+
+# chrome_green version manifest (CNB). Supplies the current plugin version and
+# the combined archive URL; fetched directly, no GitHub mirror involved.
+$ChromeGreenManifestUrl = 'https://cnb.cool/libs_repo/chrome_green_release/-/git/raw/main/version.json'
 
 # Chrome download CDN hosts. Order = menu order. Pick a mirror/proxy host here
 # if you want to redirect all Chrome downloads through it.
@@ -340,6 +344,23 @@ function Get-GitHubReleaseIndex($Repo) {
     }
     if ($null -eq $best) { return $null }
     return @{ Tag = $best.tag_name; Assets = $best.assets }
+}
+
+# chrome_green publishes version.json on CNB next to a single combined archive.
+# Read the version and download URL from it directly (no GitHub API / mirror).
+# Cache is bypassed so a re-run never sees a stale manifest.
+function Get-ChromeGreenManifest($Url) {
+    $req = [System.Net.HttpWebRequest]::Create($Url)
+    $req.UserAgent = 'PortableChromeInstaller'
+    $req.Accept = 'application/json'
+    $req.Method = 'GET'
+    $req.Timeout = 20000
+    $req.CachePolicy = New-Object System.Net.Cache.RequestCachePolicy([System.Net.Cache.RequestCacheLevel]::NoCache)
+    $resp = $req.GetResponse()
+    $sr = New-Object System.IO.StreamReader($resp.GetResponseStream())
+    $json = $sr.ReadToEnd(); $sr.Close(); $resp.Close()
+    $m = $json | ConvertFrom-Json
+    return @{ Version = $m.version; Url = $m.url; Size = $m.size; PublishedAt = $m.published_at }
 }
 
 # Compare two version strings. Returns $true when ($a -op $b) holds, where
@@ -935,35 +956,44 @@ if (-not $skipChrome) {
 $pluginVersion = $null
 $skipPlugin = $false
 try {
-    Write-Step "Resolving plugin release: $($plugin.Repo)"
-    try { $rel = Get-GitHubReleaseIndex $plugin.Repo } catch {
-        throw "Could not resolve the latest release for $($plugin.Repo): $_"
-    }
-    if (-not $rel -or -not $rel.Assets -or $rel.Assets.Count -eq 0) {
-        throw "No stable release found for $($plugin.Repo) in the release index."
-    }
-    $tag = $rel.Tag
-
-    $asset = $null
+    $pkgName = $null
+    $dlUrl = $null
     if ($plugin.Key -eq 'chrome_green') {
-        # Prefer a per-arch asset (e.g. ChromeGreen_v1.0.1_x64.zip) if present;
-        # otherwise fall back to the combined archive (ChromeGreen_v1.0.1.zip).
-        $cands = $rel.Assets | Where-Object { $_.name -match 'ChromeGreen_v.*\.zip$' }
-        $asset = $cands | Where-Object { $_.name -match ('_' + $sysArch + '\.') } | Select-Object -First 1
-        if (-not $asset) { $asset = $cands | Select-Object -First 1 }
-        # chrome_green's tag_name matches its asset version (e.g. 2.0.0).
-        $pluginVersion = $tag
+        # chrome_green ships one combined archive (all architectures) plus a
+        # version manifest on CNB. Both the version and the download URL come
+        # from version.json, so no GitHub release lookup is needed.
+        Write-Step "Resolving plugin manifest: $($plugin.Key)"
+        try { $manifest = Get-ChromeGreenManifest $ChromeGreenManifestUrl } catch {
+            throw "Could not resolve the chrome_green version manifest: $_"
+        }
+        if (-not $manifest -or -not $manifest.Url) {
+            throw "version.json for chrome_green has no download url."
+        }
+        $pluginVersion = $manifest.Version
+        $dlUrl = $manifest.Url
+        # The archive URL is version-less, so carry the version in the local
+        # cache name; otherwise Invoke-DownloadFile would reuse a stale archive.
+        $pkgName = if ($pluginVersion) { "ChromeGreen_v$pluginVersion.zip" } else { "ChromeGreen.zip" }
     } else {
+        Write-Step "Resolving plugin release: $($plugin.Repo)"
+        try { $rel = Get-GitHubReleaseIndex $plugin.Repo } catch {
+            throw "Could not resolve the latest release for $($plugin.Repo): $_"
+        }
+        if (-not $rel -or -not $rel.Assets -or $rel.Assets.Count -eq 0) {
+            throw "No stable release found for $($plugin.Repo) in the release index."
+        }
         # chrome_plus ships a single combined 7z (_x86_x64_arm64) with per-arch folders.
         $asset = $rel.Assets | Where-Object { $_.name -match 'Chrome\+\+_v.*_x86_x64_arm64\.7z$' } | Select-Object -First 1
         if (-not $asset) { $asset = $rel.Assets | Where-Object { $_.name -match 'Chrome\+\+.*\.7z$' } | Select-Object -First 1 }
+        if (-not $asset) { throw "No matching plugin archive found in the $($plugin.Repo) release." }
         # The authoritative version for chrome_plus lives in the asset filename
         # (e.g. Chrome++_v1.18.2_x86_x64_arm64.7z), which may diverge from the
         # release tag. Prefer it so the reported version matches the download.
         $assetVer = Get-VersionFromAssetName $asset.name
-        $pluginVersion = if ($assetVer) { $assetVer } else { $tag }
+        $pluginVersion = if ($assetVer) { $assetVer } else { $rel.Tag }
+        $pkgName = $asset.name
+        $dlUrl = $asset.browser_download_url -replace '^https?://', ($GhMirror + '/')
     }
-    if (-not $asset) { throw "No matching plugin archive found in the $($plugin.Repo) release." }
     Write-Status ("Plugin version : {0}" -f $pluginVersion)
 
     # Compare installed plugin version (binary version.dll, else saved config).
@@ -980,9 +1010,11 @@ try {
     }
 
     if (-not $skipPlugin) {
-        Write-Step ("Downloading plugin {0} ({1})" -f $plugin.Key, $asset.name)
-        $pluginPkg = Join-Path $cacheDir $asset.name
-        $dlUrl = $asset.browser_download_url -replace '^https?://', ($GhMirror + '/')
+        Write-Step ("Downloading plugin {0} ({1})" -f $plugin.Key, $pkgName)
+        # chrome_green cache names carry the version; drop stale archives.
+        Get-ChildItem $cacheDir -Filter 'ChromeGreen_v*.zip' -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ne $pkgName } | ForEach-Object { try { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue } catch { } }
+        $pluginPkg = Join-Path $cacheDir $pkgName
         # Invoke-DownloadFile reuses a complete cached archive or re-downloads
         # (and deletes) a partial/locked one automatically.
         Invoke-DownloadFile $dlUrl $pluginPkg ("Downloading plugin {0}" -f $plugin.Key)
@@ -990,7 +1022,7 @@ try {
         Write-Step "Extracting and installing plugin"
         $pluginExtract = Join-Path $cacheDir 'plugin_extract'
         New-Item -ItemType Directory -Path $pluginExtract -Force | Out-Null
-        if ($asset.name -like '*.zip') {
+        if ($pkgName -like '*.zip') {
             Expand-Archive -Path $pluginPkg -DestinationPath $pluginExtract -Force
         } else {
             & $sevenZip x $pluginPkg -o"$pluginExtract" -y | Out-Null
@@ -1018,7 +1050,7 @@ try {
         # Free the extracted files; keep the cached archive for next time.
         Clear-ExtractDirs
     } else {
-        Write-Step "Plugin skipped (already up to date: $tag)"
+        Write-Step "Plugin skipped (already up to date: $pluginVersion)"
     }
 } catch {
     # A plugin failure must not discard an already-installed Chrome.

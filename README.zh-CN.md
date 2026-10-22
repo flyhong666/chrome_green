@@ -38,7 +38,7 @@ ChromeGreen 是一个 `version.dll` 注入项目，**主要实现目标是便携
 
 ## 获取
 
-[Release](https://github.com/libsgh/chrome_green/releases)
+[GitHub Release](https://github.com/libsgh/chrome_green/releases) [CNB](https://cnb.cool/libs_repo/chrome_green_release/-/git/raw/main/ChromeGreen.zip) [Gitee](https://gitee.com/iicm/chrome_green_release/raw/master/ChromeGreen.zip)
 
 ## 安装
 
