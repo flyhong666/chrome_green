@@ -163,6 +163,16 @@ std::string GetStatusJson() {
   // "local package found 鈥?install offline" prompt in that case.
   bool show_local_pkg = HasLocalPackage() && !config.KeepInstaller();
   ss << "\"has_local_package\":" << (show_local_pkg ? "true" : "false") << ",";
+  // When the version being offered (latest_version) already has a matching
+  // package sitting in updates/, tell the page to show "Downloaded / Install
+  // Offline" instead of "Download" — the previous download is not wasted.
+  // Exclude kDownloading: the in-progress file already lives in updates/ under
+  // its final name, so it must not be mistaken for a complete local package.
+  bool local_pkg_matches =
+      s.state != UpdateState::kDownloading &&
+      FindLocalPackageForVersion(s.latest_version) && !config.KeepInstaller();
+  ss << "\"local_package_matches_latest\":"
+     << (local_pkg_matches ? "true" : "false") << ",";
   // Check if a pending chrome.exe swap exists (from a previous failed update)
   std::wstring new_exe = GetAppDir() + L"\\chrome.exe.new";
   ss << "\"has_pending_swap\":" << (PathFileExistsW(new_exe.c_str()) ? "true" : "false");

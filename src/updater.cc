@@ -27,6 +27,8 @@ namespace {
 
 std::atomic<bool> check_in_progress_{false};
 std::thread check_thread_;
+std::atomic<bool> shutdown_{false};
+std::thread scheduler_thread_;
 
 // Scan the updates/ directory for Chrome update package files.
 // Returns the full path of the first .7z or .exe found, or empty string if none.
@@ -69,6 +71,37 @@ std::wstring FindLocalPackage() {
 }
 
 } // namespace
+
+bool FindLocalPackageForVersion(const std::string& version) {
+  if (version.empty()) return false;
+  std::wstring updates_dir = GetSelfDllDir() + L"\\updates";
+
+  const wchar_t* patterns[] = {L"*.7z", L"*.exe"};
+  for (int p = 0; p < 2; p++) {
+    std::wstring search = updates_dir + L"\\" + patterns[p];
+    WIN32_FIND_DATAW fd;
+    HANDLE hFind = FindFirstFileW(search.c_str(), &fd);
+    if (hFind == INVALID_HANDLE_VALUE) continue;
+
+    bool matched = false;
+    do {
+      if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+      std::wstring name = fd.cFileName;
+      if (_wcsicmp(name.c_str(), L"chrome.exe") == 0) continue;
+      if (_wcsicmp(name.c_str(), L"chrome_proxy.exe") == 0) continue;
+      if (name.find(L"chrome_green") != std::wstring::npos) continue;
+      std::string name_a(name.begin(), name.end());
+      if (name_a.find(version) != std::string::npos) {
+        matched = true;
+        break;
+      }
+    } while (FindNextFileW(hFind, &fd));
+
+    FindClose(hFind);
+    if (matched) return true;
+  }
+  return false;
+}
 
 
 #ifndef IDR_UPDATER_EXE
@@ -548,9 +581,14 @@ void CheckThread() {
       g_update_state.sha256 = info.sha256;
       g_update_state.download_size = info.size;
 
-      // Compare versions
       if (info.version != g_update_state.current_version) {
-        g_update_state.state = UpdateState::kAvailable;
+        // Don't regress a completed/pending download back to "available":
+        // a periodic re-check must not wipe a kReady/kPendingApply state.
+        if (g_update_state.state != UpdateState::kReady &&
+            g_update_state.state != UpdateState::kPendingApply &&
+            g_update_state.state != UpdateState::kApplying) {
+          g_update_state.state = UpdateState::kAvailable;
+        }
       } else {
         g_update_state.state = UpdateState::kIdle;
       }
@@ -560,13 +598,49 @@ void CheckThread() {
   }
   SaveUpdateState();
 
-  // Auto-download if enabled and update is available
+  // Auto-download if enabled, update available, and not already downloaded.
   if (info.has_update && config.IsAutoDownload() &&
       info.version != g_update_state.current_version) {
-    TriggerDownload();
+    bool should_download = false;
+    {
+      std::lock_guard<std::mutex> lock(g_update_mutex);
+      should_download = (g_update_state.state != UpdateState::kReady &&
+                         g_update_state.state != UpdateState::kPendingApply &&
+                         g_update_state.state != UpdateState::kApplying);
+    }
+    if (should_download) {
+      TriggerDownload();
+    }
   }
 
   check_in_progress_.store(false);
+}
+
+// Background scheduler: while Chrome is alive (config page open or not), every
+// check_interval hours it triggers an update check. The check thread chains to a
+// download when auto_download is on. Settings (auto_check, interval) are read
+// live each cycle so toggles in the config page take effect without a restart.
+void SchedulerThread() {
+  while (!shutdown_.load()) {
+    int interval_hours = config.GetCheckInterval();
+    if (interval_hours <= 0) interval_hours = 24;
+    int64_t interval_seconds = static_cast<int64_t>(interval_hours) * 3600;
+
+    int64_t now = static_cast<int64_t>(time(nullptr));
+    int64_t next = g_update_state.last_check_time + interval_seconds;
+    int64_t wait = next - now;
+    if (wait < 0) wait = 0;
+
+    // Sleep in 1s chunks so shutdown is prompt and settings are re-read next cycle.
+    while (wait-- > 0 && !shutdown_.load()) {
+      Sleep(1000);
+    }
+    if (shutdown_.load()) break;
+
+    if (g_update_state.auto_check && !check_in_progress_.load()) {
+      TriggerUpdateCheck();
+    }
+  }
 }
 
 }  // namespace
@@ -719,8 +793,8 @@ void TriggerDownload() {
     }
     SaveUpdateState();
 
-    // Extract immediately (same as normal download completion)
-    ApplyPendingUpdate();
+    // Stop at kReady. Defer extraction + apply to user action
+    // (config-page "Restart" button or browser restart).
     return;
   }
 
@@ -1123,6 +1197,26 @@ void InitUpdater() {
     }
   }
 
+  // Apply a downloaded-but-not-yet-applied update (kReady) on startup. The
+  // user wants "restart the browser to apply", so a pending kReady update is
+  // extracted and swapped here. Mirrors the /api/restart flow.
+  {
+    auto state = GetUpdateStateSnapshot();
+    if (state.state == UpdateState::kReady && !state.download_path.empty()) {
+      std::wstring dp = Utf8ToWstr(state.download_path);
+      if (dp.find(L':') == std::wstring::npos) dp = GetSelfDllDir() + L"\\" + dp;
+      if (PathFileExistsW(dp.c_str())) {
+        AddDebugLog("InitUpdater: kReady update present at startup, applying");
+        if (ApplyPendingUpdate() && LaunchUpdateWindow()) {
+          // Exit so the updater can swap files and relaunch Chrome.
+          std::thread([]() { Sleep(1000); ExitProcess(0); }).detach();
+          return;
+        }
+        AddDebugLog("InitUpdater: failed to apply kReady update at startup");
+      }
+    }
+  }
+
   // GetInstalledChromeVersion() was already called at the top of InitUpdater,
   // so current_version is authoritative. No need to call it again here.
 
@@ -1342,10 +1436,19 @@ void InitUpdater() {
       }).detach();
     }
   }
+
+  // Start the periodic background scheduler (recurring auto-check).
+  if (!scheduler_thread_.joinable()) {
+    scheduler_thread_ = std::thread(SchedulerThread);
+  }
 }
 
 void ShutdownUpdater() {
   StopHttpServer();
+  shutdown_.store(true);
+  if (scheduler_thread_.joinable()) {
+    scheduler_thread_.join();
+  }
   if (check_thread_.joinable()) {
     check_thread_.join();
   }

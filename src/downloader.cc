@@ -632,10 +632,8 @@ void Downloader::DownloadThread(std::string url, std::wstring path,
   SetUpdateState(UpdateState::kReady);
   SaveUpdateState();
 
-  // Extract immediately — no need to wait for the user to click "Restart".
-  // This saves a step and shows "pending apply" status to indicate extraction
-  // is in progress before the restart.
-  ApplyPendingUpdate();
+  // Stop at kReady. Extraction + file swap is deferred to the user clicking
+  // "Restart" in the config page or restarting the browser.
 
   downloading_.store(false);
 }

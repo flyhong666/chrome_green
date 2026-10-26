@@ -23,6 +23,13 @@ void TriggerDownload();
 // Returns true if a local package is available for offline install.
 bool HasLocalPackage();
 
+// Check if a local package whose filename contains `version` exists in the
+// updates/ folder. Used to tell the config page that the version being
+// offered is already downloaded locally, so it can show "Downloaded / Install
+// Offline" instead of "Download". An exact-substring match against the Omaha
+// filename (e.g. "132.0.6834.59_chrome_installer_uncompressed.exe") is enough.
+bool FindLocalPackageForVersion(const std::string& version);
+
 // Delete the update working folders (updates/ and update_temp/), including
 // partial installers left behind by an interrupted/failed download. Files
 // still held open (a just-cancelled download thread inside this process, the
