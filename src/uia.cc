@@ -38,6 +38,7 @@ class ScopedVariant {
 struct CachedClassConditions {
   ComPtr<IUIAutomationCondition> tab_strip_drag_context;
   ComPtr<IUIAutomationCondition> tab_container_impl;
+  ComPtr<IUIAutomationCondition> tab_container;
   ComPtr<IUIAutomationCondition> vertical_unpinned_tab_container_view;
   ComPtr<IUIAutomationCondition> unpinned_tab_container_view;
   ComPtr<IUIAutomationCondition> tab;
@@ -148,6 +149,8 @@ bool InitializeClassConditions(UiaSession* session) {
                               &conditions.tab_strip_drag_context) &&
          CreateClassCondition(session->automation, L"TabContainerImpl",
                               &conditions.tab_container_impl) &&
+         CreateClassCondition(session->automation, L"TabContainer",
+                              &conditions.tab_container) &&
          CreateClassCondition(
              session->automation, L"VerticalUnpinnedTabContainerView",
              &conditions.vertical_unpinned_tab_container_view) &&
@@ -678,6 +681,23 @@ std::optional<TabContainer> FindTabContainerInRegion(
     return std::nullopt;
   }
 
+  // Chrome 158 restructured the horizontal strip: the container is now
+  // `TabContainer` and `TabStrip::TabDragContextImpl` (formerly a sibling of the
+  // container) is its child that directly holds the `Tab` views. Anchor
+  // hit-testing on that drag context so `TreeScope_Children` + `Tab` still
+  // resolves them one level down.
+  if (const auto tab_container = FindFirstDescendantByClass(
+          region, session.class_conditions.tab_container)) {
+    if (const auto drag = FindFirstDescendantByClass(
+            tab_container, session.class_conditions.tab_strip_drag_context)) {
+      return TabContainer{drag, TabContainerKind::kHorizontal};
+    }
+    // Some builds keep `Tab` directly under `TabContainer`.
+    return TabContainer{tab_container, TabContainerKind::kHorizontal};
+  }
+
+  // Legacy layout (Chrome < 158): `TabContainerImpl` holds the tabs, optionally
+  // reachable via its sibling `TabStrip::TabDragContextImpl`.
   if (const auto tab_strip = FindFirstDescendantByClass(
           region, session.class_conditions.tab_strip_drag_context)) {
     if (const auto container =
@@ -685,7 +705,6 @@ std::optional<TabContainer> FindTabContainerInRegion(
       return TabContainer{container, TabContainerKind::kHorizontal};
     }
   }
-
   if (const auto container = FindFirstDescendantByClass(
           region, session.class_conditions.tab_container_impl)) {
     return TabContainer{container, TabContainerKind::kHorizontal};
@@ -769,7 +788,8 @@ TabUiCache* ResolveTabUi(UiaSession* session, HWND hwnd) {
     // browser windows.
     if (const auto container = FindShallowDescendantByClasses(
             session->raw_view_walker.Get(), window_element,
-            {L"TabContainerImpl", L"VerticalUnpinnedTabContainerView",
+            {L"TabContainer", L"TabContainerImpl",
+             L"VerticalUnpinnedTabContainerView",
              L"UnpinnedTabContainerView"},
             /*max_visited=*/512)) {
       TabContainerKind kind = TabContainerKind::kHorizontal;
@@ -816,11 +836,10 @@ TabUiCache* GetValidatedTabUi(UiaSession* session, HWND hwnd, RECT* gate_rect) {
         // the only gate.
         return ui;
       }
-      RECT container_rect;
-      if (!IsRectEmpty(gate_rect) &&
-          SUCCEEDED(ui->container.element->get_CurrentBoundingRectangle(
-              &container_rect)) &&
-          !IsRectEmpty(&container_rect)) {
+      // Gate on the region rect only. Under Chrome 158 the container is wrapped
+      // by a TabDragContext and may report an empty rect while live, so per-tab
+      // PtInRect in BuildTabHitResult stays the real click filter.
+      if (!IsRectEmpty(gate_rect)) {
         return ui;
       }
     }
