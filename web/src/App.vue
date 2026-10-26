@@ -8,7 +8,7 @@
         <!-- Title row -->
         <div class="py-3 flex items-center gap-3">
           <div
-            class="w-8 h-8 rounded-lg bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] flex items-center justify-center shrink-0">
+            class="w-8 h-8 rounded-lg bg-[#2563eb] text-white flex items-center justify-center shrink-0">
             <Icon
               name="logo"
               :size="18"

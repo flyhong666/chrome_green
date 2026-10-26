@@ -43,6 +43,7 @@ const status = reactive({
   self_has_update: false,
   self_downloading: false,
   has_local_package: false,
+  local_package_matches_latest: false,
   has_pending_swap: false,
 });
 

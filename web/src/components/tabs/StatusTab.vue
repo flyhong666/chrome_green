@@ -126,7 +126,26 @@
           {{ t("complete_swap") }}
         </button>
         <button
-          v-if="status.state === 'available' && !isAutoChecking && hasChecked"
+          v-if="status.state === 'available' && !isAutoChecking && hasChecked && status.local_package_matches_latest"
+          class="btn btn-primary inline-flex items-center gap-1.5"
+          @click="offlineInstall"
+          :disabled="downloading">
+          <svg
+            class="w-4 h-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          {{ downloading ? t("starting") : t("downloaded_ready") }}
+        </button>
+        <button
+          v-if="status.state === 'available' && !isAutoChecking && hasChecked && !status.local_package_matches_latest"
           class="btn btn-primary inline-flex items-center gap-1.5"
           @click="startDownload"
           :disabled="downloading">
@@ -194,6 +213,11 @@
           {{ t("size") }} {{ formatBytes(status.download_size) }}
         </p>
         <p v-if="status.sha256" class="text-sm">SHA-256: {{ status.sha256 }}</p>
+        <p
+          v-if="status.local_package_matches_latest"
+          class="text-sm text-[hsl(var(--muted-foreground))]">
+          {{ t("local_package_hint") }}
+        </p>
       </div>
 
       <!-- Error -->

@@ -28,9 +28,12 @@ const translations = {
       "Download in progress — cancel it before re-checking",
     download_update: "Download Update",
     offline_install: "Install from Local",
+    downloaded_ready: "Downloaded / Install Offline",
     local_package_found: "Local Update Package Found",
     local_package_desc:
       'A Chrome update package was found in the updates/ folder. Must be the Omaha update package (e.g. xxx_chrome_installer_uncompressed.exe, ~470MB), NOT the Chrome web installer (ChromeSetup.exe). Click "Install from Local" to install.',
+    local_package_hint:
+      "This version's update package is already downloaded locally — you can install it offline, no re-download needed.",
     complete_swap: "Complete Pending Update",
     pending_swap_title: "Pending Chrome Update Swap",
     pending_swap_desc:
@@ -346,9 +349,12 @@ const translations = {
     check_disabled_downloading: "下载进行中，如需重新检查请先取消下载",
     download_update: "下载更新",
     offline_install: "离线安装",
+    downloaded_ready: "已下载 / 可离线安装",
     local_package_found: "发现本地安装包",
     local_package_desc:
       '在 updates/ 文件夹中发现了 Chrome 更新安装包。注意：必须是 Omaha 更新包（如 xxx_chrome_installer_uncompressed.exe，约470MB），不能是 Chrome 网页安装程序（ChromeSetup.exe）。点击"离线安装"可直接安装。',
+    local_package_hint:
+      "该版本的安装包已存在于本地，可直接离线安装，无需重新下载。",
     complete_swap: "完成待处理的更新",
     pending_swap_title: "有待处理的 Chrome 更新交换",
     pending_swap_desc:

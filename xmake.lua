@@ -68,6 +68,7 @@ target("chrome_green_updater")
     set_targetdir("$(builddir)/$(mode)")
     set_basename("chrome_green_updater")
     add_files("src/updater_gui.c")
+    add_files("src/updater_gui.rc")
     add_defines("WIN32", "_WIN32", "UNICODE", "_UNICODE", "_WIN32_WINNT=0x0601")
     set_encodings("source:utf-8")
     -- no C runtime: custom entry, only system libs, tiny binary

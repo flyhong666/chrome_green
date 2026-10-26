@@ -1515,6 +1515,8 @@ static void place_centered(HWND hw) {
   g_closeRect.bottom = (int)(32 * eff_scale + 0.5f);
 }
 
+#define IDI_CG 101
+
 static HWND create_gui() {
   WNDCLASSW wc;
   memset(&wc, 0, sizeof(wc));
@@ -1525,6 +1527,11 @@ static HWND create_gui() {
   // the mouse moves over it (DefWindowProc has nothing to restore). Set the
   // standard arrow so hovering behaves normally.
   wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
+  // Brand icon (matches the chrome_green config page favicon). Embedded as
+  // RT_GROUP_ICON 101 in this exe, which travels inside version.dll's RCDATA,
+  // so the standalone updater window shows the brand icon on the taskbar
+  // instead of the default/blank exe icon.
+  wc.hIcon = LoadIconW(GetModuleHandleW(NULL), MAKEINTRESOURCE(IDI_CG));
   wc.hbrBackground = NULL; // both paths paint themselves
   if (!RegisterClassW(&wc)) return NULL;
 
@@ -1537,6 +1544,8 @@ static HWND create_gui() {
                              NULL, NULL, wc.hInstance, NULL);
     if (hw) {
       g_hwnd = hw;
+      SendMessageW(hw, WM_SETICON, ICON_BIG, (LPARAM)wc.hIcon);
+      SendMessageW(hw, WM_SETICON, ICON_SMALL, (LPARAM)wc.hIcon);
       place_centered(hw);
       // In layered mode the window shape is controlled by the per-pixel
       // alpha channel of our ARGB bitmap — NO SetWindowRgn needed.
@@ -1567,6 +1576,8 @@ static HWND create_gui() {
                        NULL, NULL, wc.hInstance, NULL);
   if (!hw) return NULL;
   g_hwnd = hw;
+  SendMessageW(hw, WM_SETICON, ICON_BIG, (LPARAM)wc.hIcon);
+  SendMessageW(hw, WM_SETICON, ICON_SMALL, (LPARAM)wc.hIcon);
 
   // CRITICAL FIX: after creation, check actual client size vs DIB size.
   // If DPI awareness didn't take effect, the system may have scaled the
